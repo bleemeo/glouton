@@ -404,7 +404,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			Action:               relabel.Replace,
 			Separator:            ";",
 			Regex:                relabel.MustNewRegexp("(.+);(.+);yes"),
-			SourceLabels:         model.LabelNames{types.LabelMetaProbeMonitorID, types.LabelMetaBleemeoUUID, types.LabelMetaSendScraperUUID},
+			SourceLabels:         model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaBleemeoUUID, types.LabelMetaSendScraperUUID},
 			TargetLabel:          types.LabelScraperUUID,
 			Replacement:          "$2",
 			NameValidationScheme: model.UTF8Validation,
@@ -414,7 +414,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			Action:               relabel.Replace,
 			Separator:            ";",
 			Regex:                relabel.MustNewRegexp("(.+);([^:]+)(:\\d+)?"),
-			SourceLabels:         model.LabelNames{types.LabelMetaProbeMonitorID, types.LabelInstance},
+			SourceLabels:         model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelInstance},
 			TargetLabel:          types.LabelScraper,
 			Replacement:          "$2",
 			NameValidationScheme: model.UTF8Validation,
@@ -424,18 +424,26 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			Action:               relabel.Replace,
 			Separator:            ";",
 			Regex:                relabel.MustNewRegexp("(.+);(.+)"),
-			SourceLabels:         model.LabelNames{types.LabelMetaProbeMonitorID, types.LabelMetaProbeScraperName},
+			SourceLabels:         model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaProbeScraperName},
 			TargetLabel:          types.LabelScraper,
 			Replacement:          "$2",
 			NameValidationScheme: model.UTF8Validation,
 		},
-		// when the metric comes from a probe, the 'instance_uuid' label is the uuid of the monitor's agent.
-		// A monitor has no Service, so its metrics have no 'service_uuid' label.
+		// when the metric comes from a probe, the 'instance_uuid' label is the uuid of the service watched
+		// and 'service_uuid' also.
 		{
 			Action:               relabel.Replace,
 			Regex:                relabel.MustNewRegexp(regexCaptureAll),
 			SourceLabels:         model.LabelNames{types.LabelMetaBleemeoTargetAgentUUID},
 			TargetLabel:          types.LabelInstanceUUID,
+			Replacement:          "$1",
+			NameValidationScheme: model.UTF8Validation,
+		},
+		{
+			Action:               relabel.Replace,
+			Regex:                relabel.MustNewRegexp(regexCaptureAll),
+			SourceLabels:         model.LabelNames{types.LabelMetaProbeServiceUUID},
+			TargetLabel:          types.LabelServiceUUID,
 			Replacement:          "$1",
 			NameValidationScheme: model.UTF8Validation,
 		},

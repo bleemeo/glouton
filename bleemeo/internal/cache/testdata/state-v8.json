@@ -12,7 +12,7 @@
                 "listen_addresses": "",
                 "exe_path": "",
                 "tags": null,
-                "active": false,
+                "active": true,
                 "created_at": "2020-01-03T04:05:06Z",
                 "monitor_expected_content": "welcome",
                 "monitor_expected_response_code": 200,

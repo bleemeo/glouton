@@ -1077,7 +1077,8 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 						newMonitor.AgentID,
 						idAgentMain,
 					),
-					Name: testMetricProbeSuccess,
+					ServiceID: newMonitor.ServiceID,
+					Name:      testMetricProbeSuccess,
 				},
 			}
 

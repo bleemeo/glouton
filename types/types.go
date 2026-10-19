@@ -95,7 +95,7 @@ const (
 	LabelMetaBleemeoTargetAgent       = "__meta_bleemeo_target_agent"
 	LabelMetaBleemeoTargetAgentUUID   = "__meta_bleemeo_target_agent_uuid"
 	LabelMetaBleemeoUUID              = "__meta_bleemeo_uuid"
-	LabelMetaProbeMonitorID           = "__meta_probe_monitor_id"
+	LabelMetaProbeServiceUUID         = "__meta_probe_service_uuid"
 	LabelMetaProbeScraperName         = "__meta_probe_scraper_name"
 	LabelMetaSendScraperUUID          = "__meta_probe_send_agent_uuid"
 	LabelMetaCurrentStatus            = "__meta_current_status"
@@ -491,7 +491,7 @@ func consumeQuotedValueEscaped(text string, escapeAt int) (value, remaining stri
 
 // Monitor represents a monitor instance.
 type Monitor struct {
-	// ID is the UUID of the monitor on the Bleemeo API.
+	// ID is the UUID of the Service linked to the monitor, it's used as the service_uuid label.
 	ID                      string
 	MetricMonitorResolution time.Duration
 	CreationDate            time.Time

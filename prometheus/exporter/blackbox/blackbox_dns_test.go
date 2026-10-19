@@ -380,6 +380,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -392,6 +393,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -404,6 +406,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -416,6 +419,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -428,6 +432,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -440,6 +445,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -463,6 +469,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -475,6 +482,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -487,6 +495,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -499,6 +508,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -511,6 +521,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -523,6 +534,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -546,6 +558,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -558,6 +571,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -570,6 +584,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -582,6 +597,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -594,6 +610,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -606,6 +623,7 @@ func Test_Collect_DNS(t *testing.T) {
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,

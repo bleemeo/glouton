@@ -55,24 +55,28 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -83,6 +87,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -95,6 +100,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -107,6 +113,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -119,6 +126,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -132,6 +140,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -155,6 +164,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -167,6 +177,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -179,6 +190,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -192,6 +204,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -204,6 +217,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -216,6 +230,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -228,6 +243,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -240,6 +256,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -252,6 +269,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -275,6 +293,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -287,6 +306,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -299,6 +319,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -312,6 +333,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -324,6 +346,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -336,6 +359,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -348,6 +372,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -360,6 +385,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -372,6 +398,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -395,6 +422,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -407,6 +435,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -419,6 +448,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -432,6 +462,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -444,6 +475,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -456,6 +488,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -468,6 +501,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -480,6 +514,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -492,6 +527,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -514,12 +550,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -530,6 +568,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -542,6 +581,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -554,6 +594,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -567,6 +608,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -579,6 +621,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -591,6 +634,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -603,6 +647,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -623,12 +668,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -639,6 +686,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -651,6 +699,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -663,6 +712,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -676,6 +726,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -688,6 +739,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -700,6 +752,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -712,6 +765,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -735,6 +789,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -747,6 +802,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -759,6 +815,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -772,6 +829,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -784,6 +842,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -796,6 +855,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -808,6 +868,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -820,6 +881,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -832,6 +894,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -854,6 +917,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -866,6 +930,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -878,6 +943,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -891,6 +957,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -903,6 +970,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -915,6 +983,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -927,6 +996,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -939,6 +1009,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -951,6 +1022,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -973,6 +1045,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -985,6 +1058,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -997,6 +1071,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -1010,6 +1085,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1022,6 +1098,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1034,6 +1111,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1046,6 +1124,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1058,6 +1137,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1070,6 +1150,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1092,6 +1173,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1104,6 +1186,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1116,6 +1199,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -1129,6 +1213,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1141,6 +1226,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1153,6 +1239,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1165,6 +1252,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1177,6 +1265,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1189,6 +1278,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1211,6 +1301,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1223,6 +1314,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1235,6 +1327,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -1248,6 +1341,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1260,6 +1354,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1272,6 +1367,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1284,6 +1380,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1296,6 +1393,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1308,6 +1406,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1330,6 +1429,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1342,6 +1442,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1354,6 +1455,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -1367,6 +1469,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1379,6 +1482,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1391,6 +1495,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1403,6 +1508,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1415,6 +1521,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1427,6 +1534,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1449,6 +1557,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1461,6 +1570,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1473,6 +1583,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -1486,6 +1597,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1498,6 +1610,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1510,6 +1623,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1522,6 +1636,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1534,6 +1649,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1546,6 +1662,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1568,6 +1685,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1580,6 +1698,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1592,6 +1711,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -1605,6 +1725,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1617,6 +1738,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1629,6 +1751,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1641,6 +1764,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1653,6 +1777,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1665,6 +1790,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1687,6 +1813,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1699,6 +1826,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1711,6 +1839,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -1724,6 +1853,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1736,6 +1866,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1748,6 +1879,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1760,6 +1892,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1772,6 +1905,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1784,6 +1918,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1806,6 +1941,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1818,6 +1954,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1830,6 +1967,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -1843,6 +1981,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1855,6 +1994,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1867,6 +2007,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1879,6 +2020,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1891,6 +2033,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1903,6 +2046,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1925,6 +2069,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1937,6 +2082,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1949,6 +2095,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -1962,6 +2109,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1974,6 +2122,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1986,6 +2135,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1998,6 +2148,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2010,6 +2161,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2022,6 +2174,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2044,6 +2197,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2056,6 +2210,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2068,6 +2223,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -2081,6 +2237,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2093,6 +2250,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2105,6 +2263,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2117,6 +2276,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2129,6 +2289,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2141,6 +2302,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2163,6 +2325,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2175,6 +2338,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2187,6 +2351,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -2200,6 +2365,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2212,6 +2378,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2224,6 +2391,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2236,6 +2404,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2248,6 +2417,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2260,6 +2430,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2282,18 +2453,21 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				// The handshake never produced a certificate, so this scrape
 				// knows nothing about the certificate the target serves.
@@ -2302,12 +2476,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -2318,6 +2494,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2330,6 +2507,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2342,6 +2520,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -2355,6 +2534,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2385,18 +2565,21 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				// The handshake never produced a certificate, so this scrape
 				// knows nothing about the certificate the target serves.
@@ -2405,12 +2588,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -2421,6 +2606,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2433,6 +2619,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2445,6 +2632,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -2458,6 +2646,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2482,24 +2671,28 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -2510,6 +2703,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2522,6 +2716,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2534,6 +2729,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -2547,6 +2743,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2559,6 +2756,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2579,12 +2777,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				// The handshake never produced a certificate, so this scrape
 				// knows nothing about the certificate the target serves.
@@ -2593,12 +2793,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -2609,6 +2811,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2621,6 +2824,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2633,6 +2837,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -2646,6 +2851,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2658,6 +2864,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2678,6 +2885,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -2688,6 +2896,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2700,6 +2909,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2712,6 +2922,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -2725,6 +2936,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2737,6 +2949,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2749,6 +2962,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2761,6 +2975,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2773,6 +2988,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2793,12 +3009,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				// The handshake was reset before any certificate arrived, so this
 				// scrape knows nothing about the certificate the target serves.
@@ -2807,12 +3025,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -2823,6 +3043,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2835,6 +3056,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2847,6 +3069,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -2860,6 +3083,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2872,6 +3096,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2897,6 +3122,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2909,6 +3135,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2921,6 +3148,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2933,6 +3161,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2955,30 +3184,35 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeHTTPDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 					labelPhase:              phaseConnect,
 				},
 			},
@@ -2990,6 +3224,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3002,6 +3237,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3014,6 +3250,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3026,6 +3263,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3042,30 +3280,35 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeHTTPDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 					labelPhase:              phaseConnect,
 				},
 			},
@@ -3077,6 +3320,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3089,6 +3333,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3101,6 +3346,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3113,6 +3359,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3131,6 +3378,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3143,6 +3391,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3155,6 +3404,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -3168,6 +3418,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3180,6 +3431,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3192,6 +3444,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3204,6 +3457,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3216,6 +3470,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3228,6 +3483,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3254,6 +3510,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3266,6 +3523,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3278,6 +3536,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -3291,6 +3550,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3303,6 +3563,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3315,6 +3576,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3327,6 +3589,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3339,6 +3602,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3351,6 +3615,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3375,6 +3640,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3387,6 +3653,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3399,6 +3666,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -3412,6 +3680,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3424,6 +3693,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3436,6 +3706,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3448,6 +3719,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3460,6 +3732,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3472,6 +3745,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3497,6 +3771,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3509,6 +3784,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3521,6 +3797,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -3534,6 +3811,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3546,6 +3824,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3558,6 +3837,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3570,6 +3850,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3582,6 +3863,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3594,6 +3876,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3619,6 +3902,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3631,6 +3915,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3643,6 +3928,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -3656,6 +3942,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3668,6 +3955,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3680,6 +3968,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3692,6 +3981,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3704,6 +3994,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3716,6 +4007,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3741,6 +4033,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3753,6 +4046,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3765,6 +4059,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
@@ -3778,6 +4073,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3790,6 +4086,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3802,6 +4099,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3814,6 +4112,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3826,6 +4125,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3838,6 +4138,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4323,6 +4624,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -4333,6 +4635,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4345,6 +4648,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4357,6 +4661,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4369,6 +4674,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4381,6 +4687,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4393,6 +4700,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4405,6 +4713,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4426,6 +4735,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -4436,6 +4746,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4448,6 +4759,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4460,6 +4772,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4472,6 +4785,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4484,6 +4798,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4496,6 +4811,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4508,6 +4824,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4527,6 +4844,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -4537,6 +4855,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4549,6 +4868,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4561,6 +4881,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4573,6 +4894,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4585,6 +4907,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4597,6 +4920,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4609,6 +4933,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4628,6 +4953,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -4638,6 +4964,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4650,6 +4977,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4662,6 +4990,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4674,6 +5003,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4686,6 +5016,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4698,6 +5029,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4710,6 +5042,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4729,6 +5062,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -4739,6 +5073,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4751,6 +5086,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4763,6 +5099,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4775,6 +5112,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4787,6 +5125,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4799,6 +5138,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4811,6 +5151,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4830,6 +5171,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -4840,6 +5182,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4852,6 +5195,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4864,6 +5208,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4876,6 +5221,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4888,6 +5234,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4900,6 +5247,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4912,6 +5260,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4931,6 +5280,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -4941,6 +5291,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4953,6 +5304,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4965,6 +5317,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4977,6 +5330,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4989,6 +5343,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5001,6 +5356,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5013,6 +5369,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5032,24 +5389,28 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -5060,6 +5421,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5072,6 +5434,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5084,6 +5447,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5096,6 +5460,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5116,24 +5481,28 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -5144,6 +5513,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5156,6 +5526,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5168,6 +5539,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5180,6 +5552,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5200,18 +5573,21 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -5222,6 +5598,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5234,6 +5611,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5246,6 +5624,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5258,6 +5637,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5270,6 +5650,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5290,18 +5671,21 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -5312,6 +5696,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5324,6 +5709,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5336,6 +5722,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5348,6 +5735,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5360,6 +5748,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5380,18 +5769,21 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -5402,6 +5794,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5414,6 +5807,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5426,6 +5820,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5438,6 +5833,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5450,6 +5846,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5470,18 +5867,21 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
 					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -5492,6 +5892,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5504,6 +5905,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5516,6 +5918,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5528,6 +5931,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5540,6 +5944,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5556,6 +5961,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -5566,6 +5972,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5578,6 +5985,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5602,6 +6010,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -5612,6 +6021,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5624,6 +6034,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5642,6 +6053,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
 				},
 			},
 			wantPoints: []types.MetricPoint{
@@ -5652,6 +6064,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5664,6 +6077,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -5676,6 +6090,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,

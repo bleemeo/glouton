@@ -39,8 +39,6 @@ type wrapperClientMock struct {
 	resources     resourcesSet
 	requestCounts map[string]int
 	errorsCount   int
-	// monitorsErr is returned by ListMonitors and GetMonitorByID when set.
-	monitorsErr error
 
 	username, password string
 }
@@ -490,20 +488,12 @@ func (wcm *wrapperClientMock) SetMetricActive(_ context.Context, id string, acti
 func (wcm *wrapperClientMock) ListMonitors(context.Context) ([]bleemeoTypes.Monitor, error) {
 	wcm.requestCounts[mockAPIResourceMonitor]++
 
-	if wcm.monitorsErr != nil {
-		return nil, wcm.monitorsErr
-	}
-
 	// Like the real client, only list the active monitors.
 	return wcm.resources.monitors.filterResources(func(m bleemeoTypes.Monitor) bool { return m.Active }), nil
 }
 
 func (wcm *wrapperClientMock) GetMonitorByID(_ context.Context, id string) (bleemeoTypes.Monitor, error) {
 	wcm.requestCounts[mockAPIResourceMonitor]++
-
-	if wcm.monitorsErr != nil {
-		return bleemeoTypes.Monitor{}, wcm.monitorsErr
-	}
 
 	monitor := wcm.resources.monitors.findResource(func(m bleemeoTypes.Monitor) bool { return m.ID == id })
 	if monitor == nil {

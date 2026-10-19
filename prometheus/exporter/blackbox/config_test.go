@@ -18,6 +18,8 @@ package blackbox
 
 import (
 	"bytes"
+	"io"
+	"maps"
 	"net/http"
 	"reflect"
 	"slices"
@@ -28,7 +30,6 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
-	"github.com/bleemeo/glouton/utils/archivewriter"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -340,6 +341,70 @@ func TestDynamicTargetHeadRequest(t *testing.T) {
 	}
 }
 
+// TestUpdateDynamicTargetsHeadFallback ensures the GET fallback of head_request monitors with a content check
+// is remembered, so it's logged only once, and forgotten when the fallback no longer applies.
+func TestUpdateDynamicTargetsHeadFallback(t *testing.T) {
+	t.Parallel()
+
+	reg, err := registry.New(registry.Option{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bbManager, err := New(reg, config.Blackbox{}, func(...error) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	monitor := types.Monitor{
+		ID:              "1cb119d1-df61-41c7-ae6a-5b4e54442e00",
+		BleemeoAgentID:  "60ed127d-b3d3-4c82-89e2-df74a80a9e9e",
+		URL:             "https://example.com/",
+		HeadRequest:     true,
+		ExpectedContent: "welcome",
+	}
+	wantKey := monitor.ID + " " + monitor.URL
+
+	// Calling twice must keep the monitor marked as logged.
+	for range 2 {
+		if err := bbManager.UpdateDynamicTargets([]types.Monitor{monitor}); err != nil {
+			t.Fatal(err)
+		}
+
+		if !bbManager.loggedHeadFallbacks[wantKey] {
+			t.Fatalf("loggedHeadFallbacks = %v, want %q", bbManager.loggedHeadFallbacks, wantKey)
+		}
+	}
+
+	monitor.ExpectedContent = ""
+
+	if err := bbManager.UpdateDynamicTargets([]types.Monitor{monitor}); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(bbManager.loggedHeadFallbacks) != 0 {
+		t.Errorf("loggedHeadFallbacks = %v, want empty", bbManager.loggedHeadFallbacks)
+	}
+}
+
+// memoryArchive is an in-memory types.ArchiveWriter.
+type memoryArchive struct {
+	files   map[string]*bytes.Buffer
+	current string
+}
+
+func (a *memoryArchive) Create(filename string) (io.Writer, error) {
+	buf := &bytes.Buffer{}
+	a.files[filename] = buf
+	a.current = filename
+
+	return buf, nil
+}
+
+func (a *memoryArchive) CurrentFileName() string {
+	return a.current
+}
+
 // TestDiagnosticArchiveHTTPMethod ensures the diagnostic shows the HTTP method of the HTTP probes,
 // to know whether a monitor with head_request is probed with HEAD.
 func TestDiagnosticArchiveHTTPMethod(t *testing.T) {
@@ -366,16 +431,15 @@ func TestDiagnosticArchiveHTTPMethod(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var buf bytes.Buffer
+	archive := &memoryArchive{files: make(map[string]*bytes.Buffer)}
 
-	if err := bbManager.DiagnosticArchive(t.Context(), archivewriter.NewTextArchive(&buf)); err != nil {
+	if err := bbManager.DiagnosticArchive(t.Context(), archive); err != nil {
 		t.Fatal(err)
 	}
 
-	// blackbox-targets.txt is the last file of the archive.
-	_, targets, ok := strings.Cut(buf.String(), "-----[ start of filename: blackbox-targets.txt ]-----\n")
+	targets, ok := archive.files["blackbox-targets.txt"]
 	if !ok {
-		t.Fatalf("blackbox-targets.txt not in the archive:\n%s", buf.String())
+		t.Fatalf("blackbox-targets.txt not in the archive, files: %v", slices.Collect(maps.Keys(archive.files)))
 	}
 
 	wantPrefixes := []string{
@@ -385,10 +449,10 @@ func TestDiagnosticArchiveHTTPMethod(t *testing.T) {
 		"url=example.com:1234 labels=",
 	}
 
-	lines := strings.Split(strings.TrimSpace(targets), "\n")
+	lines := strings.Split(strings.TrimSpace(targets.String()), "\n")
 	for _, want := range wantPrefixes {
 		if !slices.ContainsFunc(lines, func(line string) bool { return strings.HasPrefix(line, want) }) {
-			t.Errorf("no line starting with %q in:\n%s", want, targets)
+			t.Errorf("no line starting with %q in:\n%s", want, targets.String())
 		}
 	}
 }

@@ -192,7 +192,7 @@ func checkMonitors(t *testing.T, cache *Cache) {
 }
 
 // TestUpgradeFromV8 ensures the monitors read from /v1/service/ are converted to Monitor objects,
-// without a Monitor ID until the next synchronization replaces them.
+// the ID of their Service becoming their ServiceID.
 func TestUpgradeFromV8(t *testing.T) {
 	state, err := state.Load("testdata/state-v8.json", "testdata/state-v8.json")
 	if err != nil {
@@ -205,6 +205,7 @@ func TestUpgradeFromV8(t *testing.T) {
 		{
 			Account:              "ca60bcac-4c49-436e-a0b8-ffdbf1f8eaf2",
 			AgentID:              "6b0ba586-0111-4a72-9cc7-f19d4b6558ed",
+			ServiceID:            "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
 			URL:                  "https://example.com",
 			CreationDate:         "2020-01-03T04:05:06Z",
 			Active:               true,
