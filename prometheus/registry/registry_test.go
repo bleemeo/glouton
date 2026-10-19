@@ -789,15 +789,14 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelMetaBleemeoTargetAgentUUID: testUUIDC571,
 				types.LabelMetaBleemeoUUID:            testUUIDA3,
 				// necessary for some labels to be applied
-				types.LabelMetaProbeServiceUUID: testUUIDD4,
-				types.LabelMetaSendScraperUUID:  metaLabelValueYes,
+				types.LabelMetaProbeMonitorID:  testUUIDD4,
+				types.LabelMetaSendScraperUUID: metaLabelValueYes,
 			}},
 			want: labels.FromMap(map[string]string{
 				types.LabelInstance:     testICMPTarget,
 				types.LabelScraper:      "test",
 				types.LabelInstanceUUID: testUUIDC571,
 				types.LabelScraperUUID:  testUUIDA3,
-				types.LabelServiceUUID:  testUUIDD4,
 			}),
 			wantAnnotations: types.MetricAnnotations{
 				BleemeoAgentID: testUUIDC571,
@@ -813,15 +812,14 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelMetaBleemeoTargetAgentUUID: testUUIDC571,
 				types.LabelMetaBleemeoUUID:            testUUIDA3,
 				// necessary for some labels to be applied
-				types.LabelMetaProbeServiceUUID: testUUIDD4,
-				types.LabelMetaSendScraperUUID:  metaLabelValueYes,
+				types.LabelMetaProbeMonitorID:  testUUIDD4,
+				types.LabelMetaSendScraperUUID: metaLabelValueYes,
 			}},
 			want: labels.FromMap(map[string]string{
 				types.LabelInstance:     testICMPTarget,
 				types.LabelScraper:      "super-instance",
 				types.LabelInstanceUUID: testUUIDC571,
 				types.LabelScraperUUID:  testUUIDA3,
-				types.LabelServiceUUID:  testUUIDD4,
 			}),
 			wantAnnotations: types.MetricAnnotations{
 				BleemeoAgentID: testUUIDC571,

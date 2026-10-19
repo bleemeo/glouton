@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -252,23 +253,23 @@ func Test_applyJitterToMonitorCreationDateFixedValue(t *testing.T) {
 	}
 }
 
+// newTestMonitor returns an active monitor of the account.
+func newTestMonitor(id string) bleemeoTypes.Monitor {
+	return bleemeoTypes.Monitor{
+		ID:           id,
+		Account:      accountID,
+		CreationDate: "2020-01-03T04:05:06Z",
+		Active:       true,
+		URL:          "https://example.com/" + id,
+	}
+}
+
 // TestSyncMonitorHeadRequest ensures head_request is given to the monitor manager, both on a full
 // synchronization and on a monitor update notification.
 func TestSyncMonitorHeadRequest(t *testing.T) {
-	newTestMonitor := func(id string, serviceID string, headRequest bool) bleemeoTypes.Monitor {
-		return bleemeoTypes.Monitor{
-			ID:           id,
-			ServiceID:    serviceID,
-			Account:      accountID,
-			CreationDate: "2020-01-03T04:05:06Z",
-			Active:       true,
-			URL:          "https://example.com/" + id,
-			HeadRequest:  headRequest,
-		}
-	}
-
-	monitorHeadRequest := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01", "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01", true)
-	monitorGet := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02", "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c02", false)
+	monitorHeadRequest := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01")
+	monitorHeadRequest.HeadRequest = true
+	monitorGet := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02")
 
 	helper := newHelper(t)
 	defer helper.Close()
@@ -303,8 +304,8 @@ func TestSyncMonitorHeadRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The monitor manager identifies the monitors by their Service ID.
-	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ServiceID: true, monitorGet.ServiceID: false})
+	// The monitor manager identifies the monitors by their ID.
+	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ID: true, monitorGet.ID: false})
 
 	// Swap head_request on the API, and notify only the change of the second monitor.
 	for i, m := range helper.wrapperClientMock.resources.monitors.elems {
@@ -319,33 +320,19 @@ func TestSyncMonitorHeadRequest(t *testing.T) {
 	}
 
 	// The first monitor wasn't notified, so it keeps the value from the previous synchronization.
-	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ServiceID: true, monitorGet.ServiceID: true})
+	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ID: true, monitorGet.ID: true})
 }
 
-// TestSyncMonitorWithoutService ensures a monitor without Service isn't given to the monitor manager,
-// as its metrics couldn't be attached to it.
+// TestSyncMonitorWithoutService ensures monitors are probed under their own ID: they have no
+// Service, and their metrics are only attached to their agent.
 func TestSyncMonitorWithoutService(t *testing.T) {
-	monitorWithService := bleemeoTypes.Monitor{
-		ID:           "2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01",
-		ServiceID:    "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01",
-		Account:      accountID,
-		CreationDate: "2020-01-03T04:05:06Z",
-		Active:       true,
-		URL:          "https://example.com/with-service",
-	}
-	monitorWithoutService := bleemeoTypes.Monitor{
-		ID:           "2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02",
-		Account:      accountID,
-		CreationDate: "2020-01-03T04:05:06Z",
-		Active:       true,
-		URL:          "https://example.com/without-service",
-	}
+	monitor := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01")
 
 	helper := newHelper(t)
 	defer helper.Close()
 
 	helper.preregisterAgent(t)
-	helper.wrapperClientMock.resources.monitors.add(monitorWithService, monitorWithoutService)
+	helper.wrapperClientMock.resources.monitors.add(monitor)
 	helper.initSynchronizer(t)
 
 	if err := helper.runOnce(t); err != nil {
@@ -353,25 +340,14 @@ func TestSyncMonitorWithoutService(t *testing.T) {
 	}
 
 	gotMonitors := helper.monitorManager.Monitors()
-	if len(gotMonitors) != 1 {
-		t.Fatalf("got %d monitors, want 1: %+v", len(gotMonitors), gotMonitors)
-	}
-
-	if gotMonitors[0].ID != monitorWithService.ServiceID || gotMonitors[0].URL != monitorWithService.URL {
-		t.Errorf("got monitor ID=%s URL=%s, want ID=%s URL=%s", gotMonitors[0].ID, gotMonitors[0].URL, monitorWithService.ServiceID, monitorWithService.URL)
+	if len(gotMonitors) != 1 || gotMonitors[0].ID != monitor.ID || gotMonitors[0].URL != monitor.URL {
+		t.Errorf("got monitors %+v, want the monitor with ID %s and URL %s", gotMonitors, monitor.ID, monitor.URL)
 	}
 }
 
 // TestUpdateMonitorWithoutID ensures a monitor notification without monitor ID reloads all the monitors.
 func TestUpdateMonitorWithoutID(t *testing.T) {
-	monitor := bleemeoTypes.Monitor{
-		ID:           "2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01",
-		ServiceID:    "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01",
-		Account:      accountID,
-		CreationDate: "2020-01-03T04:05:06Z",
-		Active:       true,
-		URL:          "https://example.com/",
-	}
+	monitor := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01")
 
 	helper := newHelper(t)
 	defer helper.Close()
@@ -405,27 +381,16 @@ func TestUpdateMonitorWithoutID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := helper.monitorManager.Monitors(); len(got) != 1 || got[0].ID != monitor.ServiceID {
-		t.Fatalf("got monitors %+v, want the monitor with ID %s", got, monitor.ServiceID)
+	if got := helper.monitorManager.Monitors(); len(got) != 1 || got[0].ID != monitor.ID {
+		t.Fatalf("got monitors %+v, want the monitor with ID %s", got, monitor.ID)
 	}
 }
 
 // TestMonitorNotificationRemovesMonitor ensures a notified monitor stops being probed when it's deleted,
-// no longer found or deactivated, matching it by its Monitor ID (not its Service ID).
+// no longer found or deactivated, matching it by its ID.
 func TestMonitorNotificationRemovesMonitor(t *testing.T) {
-	newTestMonitor := func(id string, serviceID string) bleemeoTypes.Monitor {
-		return bleemeoTypes.Monitor{
-			ID:           id,
-			ServiceID:    serviceID,
-			Account:      accountID,
-			CreationDate: "2020-01-03T04:05:06Z",
-			Active:       true,
-			URL:          "https://example.com/" + id,
-		}
-	}
-
-	monitorRemoved := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01", "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01")
-	monitorKept := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02", "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c02")
+	monitorRemoved := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01")
+	monitorKept := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02")
 
 	tests := []struct {
 		name string
@@ -481,8 +446,8 @@ func TestMonitorNotificationRemovesMonitor(t *testing.T) {
 			}
 
 			gotMonitors := helper.monitorManager.Monitors()
-			if len(gotMonitors) != 1 || gotMonitors[0].ID != monitorKept.ServiceID {
-				t.Errorf("got monitors %+v, want only the monitor with ID %s", gotMonitors, monitorKept.ServiceID)
+			if len(gotMonitors) != 1 || gotMonitors[0].ID != monitorKept.ID {
+				t.Errorf("got monitors %+v, want only the monitor with ID %s", gotMonitors, monitorKept.ID)
 			}
 
 			if diff := cmp.Diff([]bleemeoTypes.Monitor{monitorKept}, helper.s.option.Cache.Monitors()); diff != "" {
@@ -495,14 +460,7 @@ func TestMonitorNotificationRemovesMonitor(t *testing.T) {
 // TestSyncMonitorWithoutMonitorID ensures the monitors converted from an older cache, which have no
 // Monitor ID, are replaced by a full synchronization even when only a notified monitor is updated.
 func TestSyncMonitorWithoutMonitorID(t *testing.T) {
-	monitor := bleemeoTypes.Monitor{
-		ID:           "2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01",
-		ServiceID:    "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01",
-		Account:      accountID,
-		CreationDate: "2020-01-03T04:05:06Z",
-		Active:       true,
-		URL:          "https://example.com/",
-	}
+	monitor := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01")
 
 	// The same monitor, as converted from a cache read from /v1/service/.
 	convertedMonitor := monitor
@@ -531,6 +489,82 @@ func TestSyncMonitorWithoutMonitorID(t *testing.T) {
 	// Without the full synchronization, the converted monitor would be kept next to the notified one.
 	if diff := cmp.Diff([]bleemeoTypes.Monitor{monitor}, helper.s.option.Cache.Monitors()); diff != "" {
 		t.Errorf("cached monitors mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// TestSyncMonitorRetry ensures a monitor synchronization which failed is retried later, without
+// losing the notified updates, and that a failed full synchronization is retried as a full one.
+func TestSyncMonitorRetry(t *testing.T) {
+	monitorNotified := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01")
+	monitorNotNotified := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02")
+
+	tests := []struct {
+		name string
+		// notify requests the synchronization which fails.
+		notify func(helper *syncTestHelper)
+		// want is the monitors probed after the retry, by ID.
+		want []string
+	}{
+		{
+			name:   "notification",
+			notify: func(helper *syncTestHelper) { helper.s.UpdateMonitor("change", monitorNotified.ID) },
+			want:   []string{monitorNotified.ID},
+		},
+		{
+			name:   "full synchronization",
+			notify: func(helper *syncTestHelper) { helper.s.UpdateMonitors() },
+			want:   []string{monitorNotified.ID, monitorNotNotified.ID},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			helper := newHelper(t)
+			defer helper.Close()
+
+			helper.preregisterAgent(t)
+			helper.initSynchronizer(t)
+
+			if err := helper.runOnce(t); err != nil {
+				t.Fatal(err)
+			}
+
+			probedIDs := func() []string {
+				ids := make([]string, 0, len(helper.monitorManager.Monitors()))
+				for _, m := range helper.monitorManager.Monitors() {
+					ids = append(ids, m.ID)
+				}
+
+				slices.Sort(ids)
+
+				return ids
+			}
+
+			helper.wrapperClientMock.resources.monitors.add(monitorNotified, monitorNotNotified)
+			helper.wrapperClientMock.monitorsErr = errClientError
+			tt.notify(helper)
+			helper.AddTime(time.Minute)
+
+			if result := helper.runOnceWithResult(t); !errors.Is(result.err, errClientError) {
+				t.Fatalf("runOnce error = %v, want %v", result.err, errClientError)
+			}
+
+			if ids := probedIDs(); len(ids) != 0 {
+				t.Fatalf("monitors %v probed while the API failed", ids)
+			}
+
+			// Without a new request, the synchronization is retried once the retry delay has passed.
+			helper.wrapperClientMock.monitorsErr = nil
+			helper.AddTime(2 * monitorsSyncRetryDelay)
+
+			if err := helper.runOnce(t); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tt.want, probedIDs()); diff != "" {
+				t.Errorf("probed monitors mismatch (-want +got)\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -571,7 +605,6 @@ func TestWrapperClientMonitors(t *testing.T) {
 		"agent": "6b0ba586-0111-4a72-9cc7-f19d4b6558ed",
 		"created_at": "2020-01-03T04:05:06Z",
 		"active": true,
-		"service": "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
 		"url": "https://example.com",
 		"expected_content": "welcome",
 		"expected_response_code": 200,
@@ -582,14 +615,13 @@ func TestWrapperClientMonitors(t *testing.T) {
 	}`
 
 	// The API returns a null service when the monitor's agent has no Service in its account.
-	const monitorNoServiceJSON = `{
+	const monitorMinimalJSON = `{
 		"id": "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f",
 		"account": "9da59f53-1d90-4441-ae58-42c661cc1b9f",
 		"agent": "7a1b2c3d-4e5f-4a6b-9c8d-7e6f5a4b3c2d",
 		"created_at": "2020-01-03T04:05:06Z",
 		"active": true,
-		"service": null,
-		"url": "https://no-service.example.com",
+		"url": "https://minimal.example.com",
 		"expected_content": "",
 		"expected_response_code": null,
 		"unexpected_content": "",
@@ -598,11 +630,11 @@ func TestWrapperClientMonitors(t *testing.T) {
 		"head_request": false
 	}`
 
-	wantNoService := bleemeoTypes.Monitor{
+	wantMinimal := bleemeoTypes.Monitor{
 		ID:           "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f",
 		Account:      "9da59f53-1d90-4441-ae58-42c661cc1b9f",
 		AgentID:      "7a1b2c3d-4e5f-4a6b-9c8d-7e6f5a4b3c2d",
-		URL:          "https://no-service.example.com",
+		URL:          "https://minimal.example.com",
 		CreationDate: "2020-01-03T04:05:06Z",
 		Active:       true,
 		Headers:      map[string]string{},
@@ -612,7 +644,6 @@ func TestWrapperClientMonitors(t *testing.T) {
 		ID:                   "3b2e1f3a-8c0d-4f6e-9a57-1d2c3b4a5e6f",
 		Account:              "9da59f53-1d90-4441-ae58-42c661cc1b9f",
 		AgentID:              "6b0ba586-0111-4a72-9cc7-f19d4b6558ed",
-		ServiceID:            "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
 		URL:                  "https://example.com",
 		CreationDate:         "2020-01-03T04:05:06Z",
 		Active:               true,
@@ -642,7 +673,7 @@ func TestWrapperClientMonitors(t *testing.T) {
 
 			l.Unlock()
 
-			fmt.Fprintf(w, `{"next": null, "results": [%s, %s]}`, monitorJSON, monitorNoServiceJSON)
+			fmt.Fprintf(w, `{"next": null, "results": [%s, %s]}`, monitorJSON, monitorMinimalJSON)
 		case "/v1/monitor/" + want.ID + "/":
 			if got := r.URL.Query().Get(paramFields); got != monitorFields {
 				t.Errorf("GET %s: fields = %q, want %q", r.URL.Path, got, monitorFields)
@@ -671,7 +702,7 @@ func TestWrapperClientMonitors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff([]bleemeoTypes.Monitor{want, wantNoService}, monitors); diff != "" {
+	if diff := cmp.Diff([]bleemeoTypes.Monitor{want, wantMinimal}, monitors); diff != "" {
 		t.Errorf("ListMonitors() mismatch (-want +got)\n%s", diff)
 	}
 
@@ -700,5 +731,25 @@ func TestWrapperClientMonitors(t *testing.T) {
 
 	if diff := cmp.Diff(want, monitor); diff != "" {
 		t.Errorf("GetMonitorByID() mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// TestApplyMonitorUpdateSkipsMonitorWithoutID ensures a monitor converted from an older cache, which
+// has no ID until it's synchronized, isn't probed: its metrics are labeled with that ID.
+func TestApplyMonitorUpdateSkipsMonitorWithoutID(t *testing.T) {
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
+
+	helper.s.option.Cache.SetMonitors([]bleemeoTypes.Monitor{newTestMonitor("")})
+
+	if err := helper.s.ApplyMonitorUpdate(); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := helper.monitorManager.Monitors(); len(got) != 0 {
+		t.Errorf("got monitors %+v, want none", got)
 	}
 }

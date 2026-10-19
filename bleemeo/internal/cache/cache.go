@@ -864,7 +864,6 @@ func upgradeV7(_ bleemeoTypes.State, newData data) data {
 type monitorV8 struct {
 	ID                   string            `json:"id"`
 	Account              string            `json:"account"`
-	Active               bool              `json:"active"`
 	CreationDate         string            `json:"created_at"`
 	AgentID              string            `json:"agent"`
 	URL                  string            `json:"monitor_url"`
@@ -877,9 +876,9 @@ type monitorV8 struct {
 
 func upgradeV8(state bleemeoTypes.State, newData data) data {
 	// Version 9 reads monitors from /v1/monitor/ instead of /v1/service/: the cached monitors
-	// were Services, with the monitor options in monitor_* fields. Convert them to keep probing
-	// from the cache until the next synchronization. Their Monitor ID is unknown until then,
-	// the synchronizer does a full monitor synchronization while a monitor has no ID.
+	// were Services, with the monitor options in monitor_* fields. Their Monitor ID is unknown,
+	// so they aren't probed until the full monitor synchronization the synchronizer does while
+	// a monitor has no ID replaces them.
 	var oldData struct {
 		Monitors []monitorV8
 	}
@@ -890,14 +889,15 @@ func upgradeV8(state bleemeoTypes.State, newData data) data {
 		logger.V(1).Printf("Unable to read the monitors of the Bleemeo connector cache: %v", err)
 	}
 
+	// Only the active monitors were listed, but their active field wasn't requested,
+	// so it was always cached as false.
 	for _, m := range oldData.Monitors {
 		newData.Monitors = append(newData.Monitors, bleemeoTypes.Monitor{
 			Account:              m.Account,
 			AgentID:              m.AgentID,
-			ServiceID:            m.ID,
 			URL:                  m.URL,
 			CreationDate:         m.CreationDate,
-			Active:               m.Active,
+			Active:               true,
 			ExpectedContent:      m.ExpectedContent,
 			ExpectedResponseCode: m.ExpectedResponseCode,
 			ForbiddenContent:     m.ForbiddenContent,

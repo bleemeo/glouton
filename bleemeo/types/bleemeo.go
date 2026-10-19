@@ -166,12 +166,9 @@ type Threshold struct {
 type Monitor struct {
 	MonitorHTTPOptions
 
-	ID      string `json:"id"`
-	Account string `json:"account"`
-	AgentID string `json:"agent"`
-	// ServiceID is the Service linked to the monitor's agent.
-	// The metrics of the monitor are attached to this Service.
-	ServiceID    string `json:"service"`
+	ID           string `json:"id"`
+	Account      string `json:"account"`
+	AgentID      string `json:"agent"`
 	URL          string `json:"url"`
 	CreationDate string `json:"created_at"`
 	Active       bool   `json:"active"`
