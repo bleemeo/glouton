@@ -307,6 +307,12 @@ func (s Service) merge(update Service) Service {
 		}
 	}
 
+	// The process kept first may be one whose executable is unknown (see guessExecutable),
+	// while another process of the same service tells it.
+	if s.ExePath == "" {
+		s.ExePath = update.ExePath
+	}
+
 	for k, v := range update.IgnoredPorts {
 		if _, ok := s.IgnoredPorts[k]; !ok {
 			s.IgnoredPorts[k] = v

@@ -779,6 +779,8 @@ func usePreviousNetstat(now time.Time, previousService Service, newService Servi
 }
 
 func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
+	exePath := d.hostExePath(service.ExePath)
+
 	switch {
 	case service.ContainerID != "":
 		container, found := d.containerInfo.CachedContainer(service.ContainerID)
@@ -792,11 +794,12 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 		} else if container.StoppedAndReplaced() {
 			service.Active = false
 		}
-	case service.ExePath != "":
-		if _, err := os.Stat(service.ExePath); os.IsNotExist(err) {
+	case exePath != "":
+		if _, err := os.Stat(exePath); os.IsNotExist(err) {
 			service.Active = false
 		}
-	case service.ExePath == "" && service.Active:
+	case service.Active:
+		// Without an executable to look for, a service no longer seen is only deactivated after a delay.
 		if since := time.Since(service.LastTimeSeen); since > d.absentServiceDeactivationDelay {
 			logger.V(2).Printf("Service %q hasn't been seen since %s, deactivating it.", service.Name, since.Round(time.Second))
 
@@ -805,6 +808,34 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 	}
 
 	return service
+}
+
+// hostExePath returns where Glouton sees the executable of a service: ExePath is a path of
+// the host, which isn't Glouton's own filesystem when it runs in a container. It returns ""
+// when the executable is unknown, or the host's filesystem isn't reachable: a Glouton
+// container started without it mounted would otherwise see every executable as removed.
+func (d *Discovery) hostExePath(exePath string) string {
+	if exePath == "" {
+		return ""
+	}
+
+	opt := gloutonexec.Option{RunOnHost: true}
+
+	hostRoot, err := d.commandRunner.ResolvePath("/", opt)
+	if err != nil {
+		return ""
+	}
+
+	if _, err := os.Stat(hostRoot); err != nil {
+		return ""
+	}
+
+	path, err := d.commandRunner.ResolvePath(exePath, opt)
+	if err != nil {
+		return ""
+	}
+
+	return path
 }
 
 // copyAndMergeServiceWithOverride returns a copy of servicesMap with overrides merged into service.Config.
