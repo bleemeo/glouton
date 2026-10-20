@@ -29,13 +29,16 @@ import (
 
 func testHostFS() fstest.MapFS {
 	return fstest.MapFS{
-		"usr/sbin/apache2":                   {Mode: 0o755},
-		"usr/sbin/nginx":                     {Mode: 0o755},
-		"usr/bin/redis-server":               {Mode: 0o755},
-		"usr/lib/postgresql/16/bin/postgres": {Mode: 0o755},
-		"usr/local/bin/redis-server":         {Mode: 0o755},
-		"etc/apache2/apache2.conf":           {Mode: 0o644},
-		"usr/sbin":                           {Mode: os.ModeDir | 0o755},
+		"usr/sbin/apache2":                      {Mode: 0o755},
+		"usr/sbin/nginx":                        {Mode: 0o755},
+		"usr/bin/redis-server":                  {Mode: 0o755},
+		"usr/lib/postgresql/16/bin/postgres":    {Mode: 0o755},
+		"usr/local/bin/redis-server":            {Mode: 0o755},
+		"usr/bin/java":                          {Mode: 0o755},
+		"usr/bin/python3":                       {Mode: 0o755},
+		"usr/lib/erlang/erts-13.2/bin/beam.smp": {Mode: 0o755},
+		"etc/apache2/apache2.conf":              {Mode: 0o644},
+		"usr/sbin":                              {Mode: os.ModeDir | 0o755},
 	}
 }
 
@@ -67,6 +70,21 @@ func TestGuessExecutable(t *testing.T) {
 			name:    "rewritten into a single string, path after the name",
 			cmdLine: []string{"nginx: master process /usr/sbin/nginx -g daemon on; master_process on;"},
 			want:    "/usr/sbin/nginx",
+		},
+		{
+			name:    "java",
+			cmdLine: []string{"/usr/bin/java", "-cp", "/usr/share/cassandra/*", "org.apache.cassandra.service.CassandraDaemon"},
+			want:    "",
+		},
+		{
+			name:    "python",
+			cmdLine: []string{"/usr/bin/python3", "/usr/bin/fail2ban-server", "-xf", "start"},
+			want:    "",
+		},
+		{
+			name:    "erlang",
+			cmdLine: []string{"/usr/lib/erlang/erts-13.2/bin/beam.smp", "--", "-s", "rabbit", "boot"},
+			want:    "",
 		},
 		{
 			name:    "relative path",

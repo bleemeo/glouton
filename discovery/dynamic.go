@@ -943,7 +943,7 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 	// For now, special case for java, erlang or python process.
 	// Need a more general way to manage those case. Every interpreter/VM
 	// language are affected.
-	if name == interpreterJava || strings.HasPrefix(name, interpreterPython) || name == processErl || strings.HasPrefix(name, "beam") {
+	if isInterpreter(name) {
 		for _, candidate := range knownInterpretedProcess {
 			switch candidate.Interpreter {
 			case interpreterErlang:
@@ -978,6 +978,12 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 	}
 
 	return "", false
+}
+
+// isInterpreter tells whether the process named name is an interpreter or a VM, which runs
+// the service rather than being it.
+func isInterpreter(name string) bool {
+	return name == interpreterJava || strings.HasPrefix(name, interpreterPython) || name == processErl || strings.HasPrefix(name, "beam")
 }
 
 // excludeEmptyAddress exclude entry with empty Address IP. It will modify input.

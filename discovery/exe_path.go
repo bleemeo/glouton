@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"io/fs"
+	"path/filepath"
 	"strings"
 )
 
@@ -31,10 +32,14 @@ import (
 // "nginx: master process /usr/sbin/nginx"), so the first word of it that is such a
 // path is used otherwise.
 //
+// No executable is guessed for a process run by an interpreter (java, python, erlang):
+// the interpreter outlives the service when its package is removed, so the service is
+// left to the deactivation delay.
+//
 // hostFS is the host's filesystem, with paths relative to its root. The guess is
 // disabled when it is nil.
 func guessExecutable(hostFS fs.FS, cmdLine []string) string {
-	if hostFS == nil || len(cmdLine) == 0 {
+	if hostFS == nil || len(cmdLine) == 0 || isInterpreter(filepath.Base(cmdLine[0])) {
 		return ""
 	}
 
