@@ -761,15 +761,6 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	if uuid == "" {
-		// An API older than monitor_id only names the monitor by its Service ID,
-		// which can't be fetched from /v1/monitor/: reload all the monitors.
-		s.requestSynchronizationLocked(types.EntityAgent, true)
-		s.requestSynchronizationLocked(types.EntityMonitor, true)
-
-		return
-	}
-
 	mu := MonitorUpdate{uuid: uuid}
 
 	switch op {

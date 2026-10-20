@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/google/go-cmp/cmp"
 )
@@ -345,47 +344,6 @@ func TestSyncMonitorWithoutService(t *testing.T) {
 	}
 }
 
-// TestUpdateMonitorWithoutID ensures a monitor notification without monitor ID reloads all the monitors.
-func TestUpdateMonitorWithoutID(t *testing.T) {
-	monitor := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01")
-
-	helper := newHelper(t)
-	defer helper.Close()
-
-	helper.preregisterAgent(t)
-	helper.initSynchronizer(t)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := helper.monitorManager.Monitors(); len(got) != 0 {
-		t.Fatalf("got %d monitors, want 0", len(got))
-	}
-
-	helper.wrapperClientMock.resources.monitors.add(monitor)
-	helper.s.UpdateMonitor("change", "")
-
-	// A new monitor comes with a new agent: the agents are reloaded too.
-	helper.s.l.Lock()
-	for _, entity := range []types.EntityName{types.EntityAgent, types.EntityMonitor} {
-		if got := helper.s.forceSync[entity].Type; got != types.SyncTypeForceCacheRefresh {
-			t.Errorf("%s synchronization type = %v, want %v", entity, got, types.SyncTypeForceCacheRefresh)
-		}
-	}
-	helper.s.l.Unlock()
-
-	helper.AddTime(time.Minute)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := helper.monitorManager.Monitors(); len(got) != 1 || got[0].ID != monitor.ID {
-		t.Fatalf("got monitors %+v, want the monitor with ID %s", got, monitor.ID)
-	}
-}
-
 // TestMonitorNotificationRemovesMonitor ensures a notified monitor stops being probed when it's deleted,
 // no longer found or deactivated, matching it by its ID.
 func TestMonitorNotificationRemovesMonitor(t *testing.T) {
@@ -454,41 +412,6 @@ func TestMonitorNotificationRemovesMonitor(t *testing.T) {
 				t.Errorf("cached monitors mismatch (-want +got)\n%s", diff)
 			}
 		})
-	}
-}
-
-// TestSyncMonitorWithoutMonitorID ensures the monitors converted from an older cache, which have no
-// Monitor ID, are replaced by a full synchronization even when only a notified monitor is updated.
-func TestSyncMonitorWithoutMonitorID(t *testing.T) {
-	monitor := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01")
-
-	// The same monitor, as converted from a cache read from /v1/service/.
-	convertedMonitor := monitor
-	convertedMonitor.ID = ""
-
-	helper := newHelper(t)
-	defer helper.Close()
-
-	helper.preregisterAgent(t)
-	helper.wrapperClientMock.resources.monitors.add(monitor)
-	helper.initSynchronizer(t)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	// Simulate the converted monitor still in the cache, then notify a change of the monitor.
-	helper.s.option.Cache.SetMonitors([]bleemeoTypes.Monitor{convertedMonitor})
-	helper.s.UpdateMonitor("change", monitor.ID)
-	helper.AddTime(time.Minute)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	// Without the full synchronization, the converted monitor would be kept next to the notified one.
-	if diff := cmp.Diff([]bleemeoTypes.Monitor{monitor}, helper.s.option.Cache.Monitors()); diff != "" {
-		t.Errorf("cached monitors mismatch (-want +got)\n%s", diff)
 	}
 }
 
@@ -731,25 +654,5 @@ func TestWrapperClientMonitors(t *testing.T) {
 
 	if diff := cmp.Diff(want, monitor); diff != "" {
 		t.Errorf("GetMonitorByID() mismatch (-want +got)\n%s", diff)
-	}
-}
-
-// TestApplyMonitorUpdateSkipsMonitorWithoutID ensures a monitor converted from an older cache, which
-// has no ID until it's synchronized, isn't probed: its metrics are labeled with that ID.
-func TestApplyMonitorUpdateSkipsMonitorWithoutID(t *testing.T) {
-	helper := newHelper(t)
-	defer helper.Close()
-
-	helper.preregisterAgent(t)
-	helper.initSynchronizer(t)
-
-	helper.s.option.Cache.SetMonitors([]bleemeoTypes.Monitor{newTestMonitor("")})
-
-	if err := helper.s.ApplyMonitorUpdate(); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := helper.monitorManager.Monitors(); len(got) != 0 {
-		t.Errorf("got monitors %+v, want none", got)
 	}
 }

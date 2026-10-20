@@ -118,14 +118,6 @@ func TestMonitorUpdateNotification(t *testing.T) {
 			wantOp: "delete",
 			wantID: "3b2e1f3a-8c0d-4f6e-9a57-1d2c3b4a5e6f",
 		},
-		{
-			// An API older than monitor_id: the synchronizer reloads all the monitors on an empty ID.
-			name: "without monitor_id",
-			payload: `{"message_type": "monitor-update", "monitor_operation_type": "change",` +
-				` "monitor_uuid": "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70"}`,
-			wantOp: "change",
-			wantID: "",
-		},
 	}
 
 	for _, tt := range tests {

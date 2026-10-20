@@ -81,12 +81,6 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 		execution.RequestSynchronization(types.EntityMetric, false)
 	}
 
-	// Monitors converted from an older cache have no Monitor ID, so notifications can't match them:
-	// only a full synchronization replaces them.
-	if slices.ContainsFunc(s.option.Cache.Monitors(), func(m bleemeoTypes.Monitor) bool { return m.ID == "" }) {
-		syncType = types.SyncTypeForceCacheRefresh
-	}
-
 	if syncType != types.SyncTypeForceCacheRefresh && len(pendingMonitorsUpdate) == 0 {
 		return false, nil
 	}
@@ -172,15 +166,6 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 	agentIDHash := hashAgentID(s.agentID)
 
 	for _, monitor := range monitors {
-		// A monitor converted from an older cache has no ID until the full synchronization
-		// replaces it, and its metrics are labeled with that ID: skip it until then, before
-		// looking for its account configuration, which it doesn't need.
-		if monitor.ID == "" {
-			logger.V(2).Printf("Ignore monitor %s until it's synchronized: it has no ID", monitor.URL)
-
-			continue
-		}
-
 		// try to retrieve the probe config associated with this monitor's account
 		conf, present := probeConfigs[monitor.Account]
 		if !present {

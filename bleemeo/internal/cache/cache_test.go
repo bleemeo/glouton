@@ -181,43 +181,9 @@ func checkMetrics(t *testing.T, cache *Cache) {
 func checkMonitors(t *testing.T, cache *Cache) {
 	t.Helper()
 
-	gotMonitors := cache.Monitors()
-	if len(gotMonitors) != 1 {
-		t.Fatalf("want 1 monitor, got %d", len(gotMonitors))
-	}
-
-	if gotMonitors[0].URL != "example.com" {
-		t.Errorf("want monitor url 'example.com', got '%s'", gotMonitors[0].URL)
-	}
-}
-
-// TestUpgradeFromV8 ensures the monitors read from /v1/service/ are converted to Monitor objects,
-// without a Monitor ID until the next synchronization replaces them.
-func TestUpgradeFromV8(t *testing.T) {
-	state, err := state.Load("testdata/state-v8.json", "testdata/state-v8.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cache := Load(state)
-
-	want := []types.Monitor{
-		{
-			Account:              "ca60bcac-4c49-436e-a0b8-ffdbf1f8eaf2",
-			AgentID:              "6b0ba586-0111-4a72-9cc7-f19d4b6558ed",
-			URL:                  "https://example.com",
-			CreationDate:         "2020-01-03T04:05:06Z",
-			Active:               true,
-			ExpectedContent:      "welcome",
-			ExpectedResponseCode: 200,
-			ForbiddenContent:     "maintenance",
-			CAFile:               "/etc/ssl/ca.pem",
-			Headers:              map[string]string{"X-Test": "value"},
-		},
-	}
-
-	if diff := cmp.Diff(want, cache.Monitors()); diff != "" {
-		t.Errorf("monitors mismatch (-want +got)\n%s", diff)
+	// Monitors read from /v1/service/ are dropped in v9, they will be re-fetched from /v1/monitor/.
+	if gotMonitors := cache.Monitors(); len(gotMonitors) != 0 {
+		t.Errorf("want no monitor, got %+v", gotMonitors)
 	}
 }
 
