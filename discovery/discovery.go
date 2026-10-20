@@ -812,25 +812,13 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 
 // hostExePath returns where Glouton sees the executable of a service: ExePath is a path of
 // the host, which isn't Glouton's own filesystem when it runs in a container. It returns ""
-// when the executable is unknown, or the host's filesystem isn't reachable: a Glouton
-// container started without it mounted would otherwise see every executable as removed.
+// when the executable is unknown, or the host's filesystem isn't reachable.
 func (d *Discovery) hostExePath(exePath string) string {
 	if exePath == "" {
 		return ""
 	}
 
-	opt := gloutonexec.Option{RunOnHost: true}
-
-	hostRoot, err := d.commandRunner.ResolvePath("/", opt)
-	if err != nil {
-		return ""
-	}
-
-	if _, err := os.Stat(hostRoot); err != nil {
-		return ""
-	}
-
-	path, err := d.commandRunner.ResolvePath(exePath, opt)
+	path, err := d.commandRunner.ResolvePath(exePath, gloutonexec.Option{RunOnHost: true})
 	if err != nil {
 		return ""
 	}

@@ -239,7 +239,7 @@ func TestSetServiceActiveReadsExePathOnHost(t *testing.T) {
 // TestSetServiceActiveFallsBackOnDelay checks that a service whose executable can't be
 // looked for is deactivated once it hasn't been seen for absentServiceDeactivationDelay:
 // when its ExePath is unknown, or when the host's filesystem isn't reachable (Glouton
-// runs in a container without it mounted, or without df.host_mount_point).
+// runs in a container without df.host_mount_point).
 func TestSetServiceActiveFallsBackOnDelay(t *testing.T) {
 	t.Parallel()
 
@@ -252,7 +252,6 @@ func TestSetServiceActiveFallsBackOnDelay(t *testing.T) {
 	}{
 		{name: "unknown executable", hostRootPath: "/", exePath: ""},
 		{name: "host root path unset", hostRootPath: "", exePath: "/usr/sbin/apache2"},
-		{name: "host filesystem not mounted", hostRootPath: filepath.Join(t.TempDir(), "hostroot"), exePath: "/usr/sbin/apache2"},
 	}
 
 	for _, tt := range tests {
