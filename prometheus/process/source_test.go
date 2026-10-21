@@ -181,3 +181,61 @@ func testProc(t *testing.T, procs proc.Iter) {
 		t.Errorf("An error occurred wile trying to get Metrics: %v", err)
 	}
 }
+
+func TestProcessExecutable(t *testing.T) {
+	t.Parallel()
+
+	dash := cachedExecutable{comm: "sh", path: "/usr/bin/dash"}
+
+	tests := []struct {
+		name     string
+		cached   cachedExecutable
+		found    bool
+		comm     string
+		want     cachedExecutable
+		wantRead bool
+	}{
+		{
+			name:     "new process",
+			comm:     "sh",
+			want:     cachedExecutable{comm: "sh", path: "/usr/local/bin/uwsgi"},
+			wantRead: true,
+		},
+		{
+			name:   "same program",
+			cached: dash,
+			found:  true,
+			comm:   "sh",
+			want:   dash,
+		},
+		{
+			name:     "exec of another program",
+			cached:   dash,
+			found:    true,
+			comm:     "uwsgi",
+			want:     cachedExecutable{comm: "uwsgi", path: "/usr/local/bin/uwsgi"},
+			wantRead: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			read := false
+
+			got := processExecutable(tt.cached, tt.found, tt.comm, func() string {
+				read = true
+
+				return "/usr/local/bin/uwsgi"
+			})
+			if got != tt.want {
+				t.Errorf("processExecutable() = %+v, want %+v", got, tt.want)
+			}
+
+			if read != tt.wantRead {
+				t.Errorf("executable read = %v, want %v", read, tt.wantRead)
+			}
+		})
+	}
+}
