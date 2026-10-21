@@ -22,7 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -43,32 +43,18 @@ func callMdadm(array, mdadmPath string, runner *gloutonexec.Runner) (mdadmInfo, 
 	ctx, cancel := context.WithTimeout(context.Background(), mdadmTimeout)
 	defer cancel()
 
-	stdout, stderr, cmdWait, err := runner.StartWithPipes(ctx, runnerOpt, mdadmPath, "--detail", "/dev/"+array)
-	if err == nil {
-		defer func() {
-			_ = stdout.Close()
-			_ = stderr.Close()
-		}()
-
-		err = cmdWait()
-	}
-
+	stdout, err := runner.Run(ctx, runnerOpt, mdadmPath, "--detail", "/dev/"+array)
 	if err != nil {
 		var errOutput string
 
-		if stderrOutput, _ := io.ReadAll(stderr); len(stderrOutput) > 0 {
-			errOutput = " (stderr: " + string(stderrOutput) + ")"
+		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			errOutput = " (stderr: " + strings.TrimSpace(string(exitErr.Stderr)) + ")"
 		}
 
 		return mdadmInfo{}, fmt.Errorf("failed to run mdadm on array %s: %w%s", array, err, errOutput)
 	}
 
-	stdoutOutput, err := io.ReadAll(stdout)
-	if err != nil {
-		return mdadmInfo{}, err
-	}
-
-	return parseMdadmOutput(string(stdoutOutput))
+	return parseMdadmOutput(string(stdout))
 }
 
 func parseMdadmOutput(output string) (mdadmInfo, error) {
