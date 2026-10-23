@@ -90,7 +90,7 @@ func TestBuildLogFilterConfig(t *testing.T) {
 					"UnknownFunc(body)",
 				},
 			},
-			expectedError: `unable to parse OTTL condition "UnknownFunc(body)": undefined function "UnknownFunc"`,
+			expectedError: "unable to parse OTTL condition \"UnknownFunc(body)\": 1:1: condition failed to parse near `UnknownFun`: undefined function \"UnknownFunc\"",
 		},
 		{
 			input: config.OTELFilters{

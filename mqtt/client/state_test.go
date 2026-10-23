@@ -39,7 +39,7 @@ func TestOnConnectionLostIsLockFree(t *testing.T) {
 		// A consumer is ready: the only thing that could keep the callback from
 		// completing is the lock we hold.
 		go func() {
-			<-rs.ConnectionLostChannel()
+			<-rs.ConnectionLostChannel() //nolint:errcheck
 		}()
 
 		if doesBlock(func() { rs.OnConnectionLost(nil, errors.New("boom")) }) { //nolint:err113
