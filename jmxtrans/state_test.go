@@ -288,7 +288,10 @@ func TestJMXFeedsCollectionState(t *testing.T) {
 	waitFor(t, func() bool { return connections(j) == 0 }, "the disconnection to be counted")
 
 	cancel()
-	<-serverDone
+
+	if err := <-serverDone; err != nil {
+		t.Fatal(err)
+	}
 }
 
 func connections(j *JMX) int {
