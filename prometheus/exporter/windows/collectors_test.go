@@ -34,10 +34,10 @@ import (
 
 const (
 	windowsExporterModule = "github.com/prometheus-community/windows_exporter"
-	// registryFile holds the map of every collector windows_exporter provides,
+	// registryFile holds the registration of every collector windows_exporter provides,
 	// which is what collector.Available() returns.
 	registryFile = "pkg/collector/map.go"
-	registryVar  = "BuildersWithFlags"
+	registryVar  = "registrations"
 	// minExpectedCollectors guards against silently passing if the registry moved or
 	// changed shape: windows_exporter ships about 50 collectors, far more than this.
 	minExpectedCollectors = 20
@@ -48,7 +48,7 @@ const (
 //
 // It can't call collector.Available(): every windows_exporter package is behind a
 // "//go:build windows" constraint, so it doesn't even compile on Linux/macOS, where
-// our tests run. Instead it reads the collector names from the registry map in the
+// our tests run. Instead it reads the collector names from the registry in the
 // windows_exporter source, in the module cache.
 func Test_defaultCollectorsExistUpstream(t *testing.T) {
 	available := upstreamCollectorNames(t)
@@ -66,9 +66,9 @@ func Test_defaultCollectorsExistUpstream(t *testing.T) {
 // upstreamCollectorNames returns the collector names registered by the windows_exporter
 // version we depend on.
 //
-// The registry maps a name to its builder, and each name is the "Name" constant of the
-// collector package: pagefile.Name: NewBuilderWithFlags(pagefile.NewWithFlags). So we
-// read the map keys, then the constant each key refers to.
+// The registry lists one register() call per collector, whose first argument is the
+// "Name" constant of the collector package: register(pagefile.Name, pagefile.New, ...).
+// So we read these arguments, then the constant each one refers to.
 func upstreamCollectorNames(t *testing.T) []string {
 	t.Helper()
 
@@ -81,7 +81,7 @@ func upstreamCollectorNames(t *testing.T) []string {
 		t.Fatalf("can't parse %s of %s: %v", registryFile, windowsExporterModule, err)
 	}
 
-	// Package name (or alias) of each import, to resolve the map keys.
+	// Package name (or alias) of each import, to resolve the collector names.
 	importPaths := make(map[string]string, len(file.Imports))
 
 	for _, spec := range file.Imports {
@@ -103,25 +103,25 @@ func upstreamCollectorNames(t *testing.T) []string {
 	names := make([]string, 0, len(registry.Elts))
 
 	for _, element := range registry.Elts {
-		keyValue, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			t.Fatalf("%s of %s contains a %T, want a *ast.KeyValueExpr", registryVar, windowsExporterModule, element)
+		call, ok := element.(*ast.CallExpr)
+		if !ok || len(call.Args) == 0 {
+			t.Fatalf("%s of %s contains a %T, want a register() call", registryVar, windowsExporterModule, element)
 		}
 
-		// Both parts of the pagefile.Name key.
-		selector, ok := keyValue.Key.(*ast.SelectorExpr)
+		// Both parts of the pagefile.Name argument.
+		selector, ok := call.Args[0].(*ast.SelectorExpr)
 		if !ok {
-			t.Fatalf("%s key is a %T, want a *ast.SelectorExpr", registryVar, keyValue.Key)
+			t.Fatalf("%s name is a %T, want a *ast.SelectorExpr", registryVar, call.Args[0])
 		}
 
 		collectorPkg, ok := selector.X.(*ast.Ident)
 		if !ok {
-			t.Fatalf("%s key is qualified by a %T, want an *ast.Ident", registryVar, selector.X)
+			t.Fatalf("%s name is qualified by a %T, want an *ast.Ident", registryVar, selector.X)
 		}
 
 		importPath, ok := importPaths[collectorPkg.Name]
 		if !ok {
-			t.Fatalf("%s key %s.%s doesn't match any import", registryVar, collectorPkg.Name, selector.Sel.Name)
+			t.Fatalf("%s name %s.%s doesn't match any import", registryVar, collectorPkg.Name, selector.Sel.Name)
 		}
 
 		collectorDir := filepath.Join(moduleDir, filepath.FromSlash(strings.TrimPrefix(importPath, windowsExporterModule+"/")))

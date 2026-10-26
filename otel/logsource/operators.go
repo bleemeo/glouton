@@ -235,7 +235,7 @@ func wrapWithOperators(operators []operator.Config, set component.TelemetrySetti
 	}
 
 	emitter := helper.NewSynchronousLogEmitter(set, func(ctx context.Context, entries []*entry.Entry) {
-		if err := next.ConsumeLogs(ctx, adapter.ConvertEntries(entries)); err != nil {
+		if err := next.ConsumeLogs(ctx, adapter.ConvertEntries(entries, "", "")); err != nil {
 			logger.V(1).Printf("logsource: network operator pipeline: forwarding converted batch: %v", err)
 		}
 	})
