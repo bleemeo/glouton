@@ -1546,7 +1546,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 		t.Setenv("GLOUTON_WEB_LISTENER_PORT", "not-a-port")
 		t.Setenv("GLOUTON_BLEEMEO_MQTT_PORT", "1883")
 
-		config, items, warnings, err := Load(true, true, "")
+		config, items, warnings, err := Load(true, true, "testdata/empty.conf")
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -1674,7 +1674,9 @@ func TestStateLoading(t *testing.T) {
 			},
 		},*/
 		{
-			Name: "Glouton as dev",
+			// The empty file avoids falling back to the default paths, which would read the host's config.
+			Name:  "Glouton as dev",
+			Files: []string{"testdata/empty.conf"},
 			WantConfig: Agent{
 				InstallationFormat:     DefaultInstallFormat,
 				CloudImageCreationFile: defaultAgentCfg.CloudImageCreationFile,
