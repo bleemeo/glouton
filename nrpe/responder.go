@@ -143,7 +143,7 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 	out, err := r.runner.Run(ctx, gloutonexec.Option{CombinedOutput: true}, nrpeCommand[0], nrpeCommand[1:]...)
 	nagiosCode := 0
 
-	if exitError, ok := err.(*exec.ExitError); ok {
+	if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 		nagiosCode = exitError.ExitCode()
 	} else if err != nil {
 		logger.V(1).Printf("NRPE command %s failed : %s", nrpeCommand, err)

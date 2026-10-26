@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
+	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/threshold"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/metricutils"
@@ -113,9 +114,12 @@ const (
 	ConfigTypeLiveProcess            = 1070
 	ConfigTypeLiveProcessResolution  = 1071
 	ConfigTypeCustomMetrics          = 1400
-	ConfigTypeAgentMetricsAllowlist  = 10000
-	ConfigTypeAgentMetricsResolution = 11000
-	ConfigTypeSuspended              = 100000
+	// ConfigTypeGloutonSendRegistrationStatus allows sending the Agent's registration_status. It
+	// lets Bleemeo turn the feature off, as on a Glouton version that misbehaves, without an upgrade.
+	ConfigTypeGloutonSendRegistrationStatus = 2001
+	ConfigTypeAgentMetricsAllowlist         = 10000
+	ConfigTypeAgentMetricsResolution        = 11000
+	ConfigTypeSuspended                     = 100000
 )
 
 // Application is a group of services.
@@ -257,6 +261,106 @@ func (kind FailureKind) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+// MetricStateReason is why a metric Glouton has is not registered on Bleemeo. It unifies
+// FailureKind (refused by the API), DenyReason (dropped before registration) and the
+// dependency waits, which had no name, so that Bleemeo gets one vocabulary.
+type MetricStateReason string
+
+// All possible values of MetricStateReason.
+const (
+	// ReasonPending means the metric is simply waiting to be registered. Nothing is wrong.
+	ReasonPending MetricStateReason = "pending"
+	// ReasonUnknown means the registration failed for a reason Glouton could not classify.
+	ReasonUnknown MetricStateReason = "unknown"
+
+	// ReasonNotAllowed and the two following come from FailureKind: registration was
+	// attempted by Glouton and refused by the API.
+	ReasonNotAllowed             MetricStateReason = "not-allowed"
+	ReasonTooManyStandardMetrics MetricStateReason = "too-many-standard-metrics"
+	ReasonTooManyCustomMetrics   MetricStateReason = "too-many-custom-metrics"
+
+	// ReasonNotAvailableInPlan and the four following come from DenyReason: the metric
+	// was dropped before registration was even attempted.
+	ReasonNotAvailableInPlan  MetricStateReason = "not-available-in-plan"
+	ReasonErrorOccurred       MetricStateReason = "error-occurred"
+	ReasonNoDockerIntegration MetricStateReason = "no-docker-integration"
+	ReasonItemTooLong         MetricStateReason = "item-too-long"
+	ReasonMissingContainerID  MetricStateReason = "missing-container-id"
+
+	// ReasonWaitingContainer and ReasonWaitingService mean the metric depends on an
+	// object that has to be registered first.
+	ReasonWaitingContainer MetricStateReason = "waiting-container"
+	ReasonWaitingService   MetricStateReason = "waiting-service"
+	// ReasonWaitingAccountConfig means Glouton has not yet received the account
+	// configuration, without which it cannot decide what to register.
+	ReasonWaitingAccountConfig MetricStateReason = "waiting-account-config"
+)
+
+// MetricStateReason converts a registration failure to the unified vocabulary.
+func (kind FailureKind) MetricStateReason() MetricStateReason {
+	switch kind {
+	case FailureAllowList:
+		return ReasonNotAllowed
+	case FailureTooManyStandardMetrics:
+		return ReasonTooManyStandardMetrics
+	case FailureTooManyCustomMetrics:
+		return ReasonTooManyCustomMetrics
+	case FailureUnknown:
+		return ReasonUnknown
+	default:
+		return ReasonUnknown
+	}
+}
+
+// MetricStateReason converts a deny reason to the unified vocabulary.
+//
+// NotDenied has no reason of its own: a metric that was not denied is not in the list.
+func (d DenyReason) MetricStateReason() MetricStateReason {
+	switch d {
+	case DenyNotAvailableInCurrentPlan:
+		return ReasonNotAvailableInPlan
+	case DenyErrorOccurred:
+		return ReasonErrorOccurred
+	case DenyNoDockerIntegration:
+		return ReasonNoDockerIntegration
+	case DenyItemTooLong:
+		return ReasonItemTooLong
+	case DenyMissingContainerID:
+		return ReasonMissingContainerID
+	case NotDenied:
+		return ReasonUnknown
+	default:
+		return ReasonUnknown
+	}
+}
+
+// MetricState is how many metrics sharing a name are not registered, and why. Name is the
+// metric name only, such as "disk_used_perc", without item or labels.
+type MetricState struct {
+	Name   string            `json:"name"`
+	Reason MetricStateReason `json:"reason"`
+	Count  int               `json:"count"`
+}
+
+// RegistrationStatusSent is what Glouton remembers of the last registration status it sent,
+// kept in the cache so that a restart neither re-sends an unchanged value before its day nor
+// reads every service as new.
+type RegistrationStatusSent struct {
+	// AgentID is the agent the value was sent to: the cache, in state.cache.json, survives
+	// deleting state.json to register again.
+	AgentID string
+	// Hash identifies the value last accepted by the API. Empty when none was.
+	Hash string
+	// Services are the services that value listed as settled. See syncregistrationstatus.NeedSend.
+	Services []discovery.NameInstance
+	// AcceptedAt is when the API accepted that value, the generated_at it holds.
+	AcceptedAt time.Time
+	// LastAttemptAt is when a send was last attempted, accepted or not.
+	LastAttemptAt time.Time
+	// LastAttemptFailed tells whether that attempt was refused or failed.
+	LastAttemptFailed bool
 }
 
 // RetryAfter return the time after which the retry of the registration may be retried.

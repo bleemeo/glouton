@@ -48,7 +48,13 @@ type Discoverer interface {
 // PersistentDiscoverer also allow to remove a non-running service and get latest discovery done.
 type PersistentDiscoverer interface {
 	GetLatestDiscovery() ([]Service, time.Time)
+	// LastDiscoveryAt is GetLatestDiscovery's time, without copying the services nor waiting
+	// for a discovery run. See Discovery.LastDiscoveryAt.
+	LastDiscoveryAt() time.Time
 	RemoveIfNonRunning(services []Service)
+	// ServicesState returns, for each service, whether Glouton monitors it and why not.
+	// See Discovery.ServicesState.
+	ServicesState() []ServiceState
 }
 
 // NameInstance contains the service and instance names.

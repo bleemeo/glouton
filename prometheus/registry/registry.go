@@ -27,7 +27,10 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net"
 	"net/http"
+	"os"
+	"regexp"
 	"runtime"
 	"slices"
 	"sort"
@@ -336,6 +339,206 @@ type registration struct {
 	hookMinimalInterval  time.Duration
 	interval             time.Duration
 	lastErrorLogAt       time.Time
+	// runningSince is when the run in progress started, zero between runs. See stuck.
+	runningSince time.Time
+}
+
+// scrapeStateRuns is how many recent runs LastScrapeState considers, so that an input failing
+// one scrape in two reads as failing rather than alternating on every scrape.
+const scrapeStateRuns = 3
+
+// scrapeStuckIntervals is how many intervals a run may last before it counts as stuck: Telegraf
+// inputs ignore the context's deadline, and the loop waits on them. More than one, so that a run
+// occasionally slower than its interval does not put the service in error.
+const scrapeStuckIntervals = 3
+
+// errScrapeStuck is reported for an input whose runs do not complete in time. See stuck.
+var errScrapeStuck = errors.New("the scrape did not complete in time")
+
+// LastScrapeState returns a snapshot of the recent runs of this registration, for
+// discovery's report of whether a service's input works: stuck, or the most recent error of
+// the last scrapeStateRuns runs.
+//
+// Only reg.l is taken, never r.l, which can deadlock while a registration is stopped or
+// restarted (see restartScrapeLoop).
+func (reg *registration) LastScrapeState() types.ScrapeState {
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	// Before the other cases: a hung run records nothing, so the records only tell how the
+	// runs before it went.
+	if reg.stuck(time.Now()) {
+		return types.ScrapeState{
+			Status:       types.ScrapeRan,
+			Error:        errScrapeStuck.Error(),
+			ErrorKind:    scrapeErrorKind(errScrapeStuck),
+			RegisteredAt: reg.addedAt,
+		}
+	}
+
+	if len(reg.lastScrapes) == 0 {
+		return types.ScrapeState{}
+	}
+
+	last := reg.lastScrapes[len(reg.lastScrapes)-1]
+
+	// A run skipped by the relabel hook is neither a scrape nor a failure: the hook skips a
+	// service's input until the service is registered on Bleemeo. Only the last few runs
+	// count: walking further back would report a stale result, which would then change by
+	// itself as the ring rolls over.
+	if errors.Is(last.Error, errSkippingScrapeDueToRelabelHook) {
+		return types.ScrapeState{Status: types.ScrapeSkipped}
+	}
+
+	state := types.ScrapeState{Status: types.ScrapeRan, RegisteredAt: reg.addedAt}
+
+	for _, run := range reg.lastScrapes[max(0, len(reg.lastScrapes)-scrapeStateRuns):] {
+		if errors.Is(run.Error, errSkippingScrapeDueToRelabelHook) {
+			continue
+		}
+
+		if run.Error != nil {
+			state.Error = run.Error.Error()
+			state.ErrorKind = scrapeErrorKind(run.Error)
+
+			// A run that gathered points reached the service, though part of it did not
+			// answer: one endpoint of several timing out.
+			if state.ErrorKind == types.ScrapeErrorUnreachable && run.ScrapedPointsCount > 0 {
+				state.ErrorKind = types.ScrapeErrorGatherer
+			}
+		}
+	}
+
+	return state
+}
+
+// notGatheredError marks an error of the registry itself, before the gatherer ran: the
+// service was not reached. Its message is the wrapped error's.
+type notGatheredError struct {
+	error
+}
+
+func (e notGatheredError) Unwrap() error {
+	return e.error
+}
+
+// netErrorTextRegex matches the text of Go's network errors, for an input that rebuilt its error
+// from the text and lost its type, as Elasticsearch's does: "dial tcp 127.0.0.1:9200: connect:
+// connection refused", "read udp 127.0.0.1:123: i/o timeout", "dial tcp: lookup db on
+// 127.0.0.53:53: no such host", a context's deadline or "net/http: TLS handshake timeout". Only
+// where Go's HTTP client puts its error, after `Get "url": `, or at the start of a line, as joined
+// errors are: a message from the service quoting Go's wording, about a backend of its own, is
+// not the service failing to answer.
+var netErrorTextRegex = regexp.MustCompile(
+	`(?:^|\n|": )(?:(?:dial|read|write) (?:tcp|udp|ip|unix)(?:4|6|gram|packet)? \S+: |(?:dial (?:tcp|udp|ip)(?:4|6)?: )?lookup \S+(?: on \S+)?: no such host\b|context deadline exceeded\b|net/http: TLS handshake timeout\b)`,
+)
+
+// scrapeErrorKind tells where a scrape error comes from. A service did not answer when a
+// connection could not be made or was cut, a name did not resolve, it timed out, or the run did
+// not complete. It reads the error values, which inputs mostly keep wrapped or joined, and only
+// when none tells, the text of Go's network errors. A network operation other than dial, read
+// or write, such as a TLS alert ("remote error"), comes from a service that answered. A canceled
+// run is Glouton's doing: its loop stopped, as when it restarts. Joined with other errors, the
+// cancellation tells nothing: they do.
+func scrapeErrorKind(err error) types.ScrapeErrorKind {
+	switch {
+	case err == nil:
+		return types.ScrapeErrorNone
+	case errors.Is(err, errScrapeStuck):
+		return types.ScrapeErrorUnreachable
+	case errors.As(err, new(notGatheredError)):
+		// Before the deadline check: waiting for the secrets gate ends with the context's error.
+		return types.ScrapeErrorInternal
+	case errors.Is(err, context.Canceled):
+		// Before the network checks: a dial canceled is an OpError too.
+		if others := withoutCanceled(err); others != nil {
+			return scrapeErrorKind(others)
+		}
+
+		return types.ScrapeErrorInternal
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, os.ErrDeadlineExceeded):
+		return types.ScrapeErrorUnreachable
+	case errors.As(err, new(*net.DNSError)):
+		return types.ScrapeErrorUnreachable
+	}
+
+	// Timeouts of other kinds, such as net/http's TLS handshake timeout.
+	if timeoutErr := (interface{ Timeout() bool })(nil); errors.As(err, &timeoutErr) && timeoutErr.Timeout() {
+		return types.ScrapeErrorUnreachable
+	}
+
+	if opErr := new(net.OpError); errors.As(err, &opErr) {
+		switch opErr.Op {
+		case "dial", "read", "write":
+			return types.ScrapeErrorUnreachable
+		}
+	}
+
+	if netErrorTextRegex.MatchString(err.Error()) {
+		return types.ScrapeErrorUnreachable
+	}
+
+	return types.ScrapeErrorGatherer
+}
+
+// withoutCanceled returns the errors joined in err that are not a cancellation, nil when there
+// are none. What wraps a cancellation is dropped with it.
+func withoutCanceled(err error) error {
+	if !errors.Is(err, context.Canceled) {
+		return err
+	}
+
+	switch wrapped := err.(type) { //nolint:errorlint // Walks the tree errors.Is walks.
+	case interface{ Unwrap() []error }:
+		var others []error
+
+		for _, member := range wrapped.Unwrap() {
+			if other := withoutCanceled(member); other != nil {
+				others = append(others, other)
+			}
+		}
+
+		return errors.Join(others...)
+	case interface{ Unwrap() error }:
+		return withoutCanceled(wrapped.Unwrap())
+	}
+
+	return nil
+}
+
+// addScrapeRun records a run in lastScrapes, keeping the last maxLastScrape.
+// Must be called with reg.l held.
+func (reg *registration) addScrapeRun(run scrapeRun) {
+	reg.lastScrapes = append(reg.lastScrapes, run)
+
+	if len(reg.lastScrapes) > maxLastScrape {
+		reg.lastScrapes = reg.lastScrapes[len(reg.lastScrapes)-maxLastScrape:]
+	}
+}
+
+// stuck tells whether the input's runs do not complete in time: the run in progress, or one of
+// the last scrapeStateRuns runs, lasted longer than scrapeStuckIntervals intervals of the
+// running loop. The first case is a hung run, which records nothing until it returns, if ever.
+// The second keeps an input whose runs always last too long in error between two of them.
+// Without a running loop, nothing runs late. Must be called with reg.l held.
+func (reg *registration) stuck(now time.Time) bool {
+	if reg.loop == nil || reg.loop.interval <= 0 {
+		return false
+	}
+
+	limit := scrapeStuckIntervals * reg.loop.interval
+
+	if !reg.runningSince.IsZero() && now.Sub(reg.runningSince) > limit {
+		return true
+	}
+
+	for _, run := range reg.lastScrapes[max(0, len(reg.lastScrapes)-scrapeStateRuns):] {
+		if run.ScrapeDuration > limit {
+			return true
+		}
+	}
+
+	return false
 }
 
 // runNow will trigger a run of the scrapeLoop. If the registry isn't running,
@@ -1634,6 +1837,10 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 		err      error
 	)
 
+	reg.l.Lock()
+	reg.runningSince = time.Now()
+	reg.l.Unlock()
+
 	go func() {
 		defer crashreport.ProcessPanic()
 		defer close(goroutingFinished)
@@ -1653,6 +1860,10 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 		case <-deadlineTimer.C:
 			logger.V(2).Printf("%s didn't finished on time, abandon the gorouting", reg.option.Description)
 
+			reg.l.Lock()
+			reg.runningSince = time.Time{}
+			reg.l.Unlock()
+
 			return
 		case <-goroutingFinished:
 		}
@@ -1660,7 +1871,8 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 
 	reg.l.Lock()
 
-	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs), Error: err})
+	reg.runningSince = time.Time{}
+	reg.addScrapeRun(scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs), Error: err})
 
 	if errors.Is(err, errSkippingScrapeDueToRelabelHook) {
 		// We don't log skipping due to relabel hook, but we still store the error in reg.lastScrapes
@@ -1682,10 +1894,6 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 			// fail on some setup. Also, node_exporter may send "node_rapl_package_joules_total" duplicated.
 			logger.V(logLvl).Printf("Gather of metrics failed on %s, some metrics may be missing: %v", reg.option.Description, err)
 		}
-	}
-
-	if len(reg.lastScrapes) > maxLastScrape {
-		reg.lastScrapes = reg.lastScrapes[len(reg.lastScrapes)-maxLastScrape:]
 	}
 
 	reg.l.Unlock()
@@ -1773,12 +1981,12 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 
 	if hasSecrets && secretInput.SecretCount() > 0 {
 		if r.option.SecretInputsGate == nil {
-			return nil, 0, fmt.Errorf("%w: no secretInputsGate but input had SecretCount()", ErrBadArgument)
+			return nil, 0, notGatheredError{fmt.Errorf("%w: no secretInputsGate but input had SecretCount()", ErrBadArgument)}
 		}
 
 		releaseGate, err := WaitForSecrets(ctx, r.option.SecretInputsGate, secretInput.SecretCount())
 		if err != nil {
-			return nil, 0, err // The context expired
+			return nil, 0, notGatheredError{err} // The context expired
 		}
 
 		defer releaseGate()

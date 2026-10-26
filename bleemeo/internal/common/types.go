@@ -95,6 +95,13 @@ func ServiceLookupFromList(registeredServices []bleemeoTypes.Service) map[Servic
 	return registeredServicesByKey
 }
 
+// IsOwnMetric tells whether a metric with these annotations belongs to agentID rather than to
+// another agent, such as a monitor, an SNMP device or a vSphere host: it has no agent ID of
+// its own, or agentID's.
+func IsOwnMetric(annotations types.MetricAnnotations, agentID string) bool {
+	return annotations.BleemeoAgentID == "" || annotations.BleemeoAgentID == agentID
+}
+
 // IgnoreContainer returns true if the metric's container information should be ignored.
 // If this is true, docker integration is also disabled.
 func IgnoreContainer(cfg bleemeoTypes.GloutonAccountConfig, labels map[string]string) bool {

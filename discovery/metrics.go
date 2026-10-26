@@ -30,48 +30,16 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
 	"github.com/bleemeo/glouton/inputs"
-	"github.com/bleemeo/glouton/inputs/activemq"
-	"github.com/bleemeo/glouton/inputs/apache"
-	"github.com/bleemeo/glouton/inputs/bind"
-	"github.com/bleemeo/glouton/inputs/chrony"
-	"github.com/bleemeo/glouton/inputs/clickhouse"
-	"github.com/bleemeo/glouton/inputs/consul"
 	"github.com/bleemeo/glouton/inputs/cpu"
 	"github.com/bleemeo/glouton/inputs/disk"
 	"github.com/bleemeo/glouton/inputs/diskio"
-	"github.com/bleemeo/glouton/inputs/dovecot"
-	"github.com/bleemeo/glouton/inputs/elasticsearch"
-	"github.com/bleemeo/glouton/inputs/fail2ban"
-	"github.com/bleemeo/glouton/inputs/haproxy"
-	"github.com/bleemeo/glouton/inputs/influxdb"
-	"github.com/bleemeo/glouton/inputs/jenkins"
 	"github.com/bleemeo/glouton/inputs/mem"
-	"github.com/bleemeo/glouton/inputs/memcached"
 	"github.com/bleemeo/glouton/inputs/modify"
-	"github.com/bleemeo/glouton/inputs/mongodb"
 	"github.com/bleemeo/glouton/inputs/mysql"
-	"github.com/bleemeo/glouton/inputs/nats"
 	netInput "github.com/bleemeo/glouton/inputs/net"
-	"github.com/bleemeo/glouton/inputs/nfs"
-	"github.com/bleemeo/glouton/inputs/nginx"
-	"github.com/bleemeo/glouton/inputs/nsq"
-	"github.com/bleemeo/glouton/inputs/ntp"
-	"github.com/bleemeo/glouton/inputs/openbao"
-	"github.com/bleemeo/glouton/inputs/openldap"
-	"github.com/bleemeo/glouton/inputs/pgbouncer"
-	"github.com/bleemeo/glouton/inputs/phpfpm"
-	"github.com/bleemeo/glouton/inputs/postgresql"
-	"github.com/bleemeo/glouton/inputs/rabbitmq"
-	"github.com/bleemeo/glouton/inputs/redis"
 	"github.com/bleemeo/glouton/inputs/swap"
 	"github.com/bleemeo/glouton/inputs/system"
-	"github.com/bleemeo/glouton/inputs/tomcat"
-	"github.com/bleemeo/glouton/inputs/upsd"
-	"github.com/bleemeo/glouton/inputs/uwsgi"
-	"github.com/bleemeo/glouton/inputs/varnish"
-	"github.com/bleemeo/glouton/inputs/vault"
 	"github.com/bleemeo/glouton/inputs/winperfcounters"
-	"github.com/bleemeo/glouton/inputs/zookeeper"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/zfs"
 	"github.com/bleemeo/glouton/prometheus/registry"
@@ -247,8 +215,14 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameInstance
 		if !ok || serviceNeedUpdate(oldService, service, oldServiceState, serviceState) {
 			d.removeInput(key)
 
-			if serviceState != facts.ContainerStopped {
-				err.Append(d.createInput(service))
+			if serviceState == facts.ContainerStopped {
+				d.inputResult[key] = newInputResult(inputContainerStopped, nil)
+			} else {
+				outcome, createErr := d.createInput(service)
+
+				d.inputResult[key] = newInputResult(outcome, createErr)
+
+				err.Append(createErr)
 			}
 		}
 	}
@@ -300,6 +274,8 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 }
 
 func (d *Discovery) removeInput(key NameInstance) {
+	delete(d.inputResult, key)
+
 	if collector, ok := d.activeCollector[key]; ok {
 		logger.V(2).Printf("Remove input for service %v on instance %s", key.Name, key.Instance)
 		delete(d.activeCollector, key)
@@ -308,23 +284,33 @@ func (d *Discovery) removeInput(key NameInstance) {
 	}
 }
 
-func (d *Discovery) createInput(service Service) error { //nolint:maintidx
+// createInput builds and registers the metric input of a service, and returns what it could
+// do: the ways of ending with no input mean different things to a user.
+func (d *Discovery) createInput(service Service) (inputOutcome, error) {
 	if !service.Active {
-		return nil
+		return inputInactive, nil
 	}
 
 	if service.MetricsIgnored {
 		logger.V(2).Printf("The input associated to the service '%s' on container '%s' is ignored by the configuration", service.Name, service.ContainerID)
 
-		return nil
+		return inputIgnored, nil
 	}
 
-	var (
-		input telegraf.Input
-		err   error
-		// Inputs that return gatherer options will use an input gatherer instead of the collector,
-		// this means all labels will be kept and not only the item.
-	)
+	// A custom check never has a metric input, which is not an unsupported type.
+	if service.ServiceType == CustomService {
+		return inputCheckOnly, nil
+	}
+
+	build, ok := inputBuilders[service.ServiceType]
+	if !ok {
+		// The agent gathers the metrics of a few types itself: no input is not "no metrics".
+		if !d.agentGathererTypes[service.ServiceType] {
+			logger.V(1).Printf("service type %s don't support metrics", service.ServiceType)
+		}
+
+		return inputUnsupportedType, nil
+	}
 
 	// Most input use the compatibility naming with only name + item.
 	// Inputs that what more flexibility could return their own gathererOptions.
@@ -333,292 +319,13 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		CompatibilityNameItem: true,
 	}
 
-	switch service.ServiceType { //nolint:exhaustive
-	case ActiveMQService:
-		if url, username, password := activeMQURL(service); url != "" {
-			// One point per queue, topic and subscriber, all sharing their metric name, so
-			// what identifies a destination has to be a label of its own -- the
-			// compatibility naming keeps only the item and would collapse them onto one
-			// series. The item stays the service instance instead of being glued to a
-			// destination name; see the renameGlobal of inputs/activemq.
-			gathererOptions.CompatibilityNameItem = false
+	input, err := build(d, service, &gathererOptions)
 
-			input, err = activemq.New(url, username, password)
-		}
-	case ApacheService:
-		if ip, port := service.AddressPort(); ip != "" {
-			input, err = apache.New(apacheStatusURL(ip, port))
-		}
-	case BindService:
-		if url := bindStatsURL(service); url != "" {
-			input, err = bind.New(url)
-		}
-	case ClickHouseService:
-		if service.Config.StatsURL != "" {
-			if service.Config.Username == "" {
-				service.Config.Username = "default"
-			}
-
-			input, err = clickhouse.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
-		} else if ip, port := clickHouseAddress(service); ip != "" {
-			if service.Config.Username == "" {
-				service.Config.Username = "default"
-			}
-
-			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
-			input, err = clickhouse.New(url, service.Config.Username, service.Config.Password)
-		}
-	case ConsulService:
-		// Some Consul metrics come as one series per label set, so those labels have to be
-		// kept rather than reduced to the item -- see the renameGlobal of inputs/consul for
-		// which ones and why they are safe to keep.
-		gathererOptions.CompatibilityNameItem = false
-
-		if service.Config.StatsURL != "" {
-			input, err = consul.New(service.Config.StatsURL, service.Config.Password)
-		} else if ip, port := service.AddressPort(); ip != "" {
-			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
-			input, err = consul.New(url, service.Config.Password)
-		}
-	case DovecotService:
-		if server := dovecotStatsServer(service); server != "" {
-			input, err = dovecot.New(server)
-		}
-	case ElasticSearchService:
-		if ip, port := service.AddressPort(); ip != "" {
-			input, err = elasticsearch.New("http://" + net.JoinHostPort(ip, strconv.Itoa(port)))
-		}
-	case Fail2banService:
-		input, gathererOptions, err = fail2ban.New()
-	case HAProxyService:
-		if service.Config.StatsURL != "" {
-			input, err = haproxy.New(service.Config.StatsURL)
-		}
-	case InfluxDBService:
-		// The server's root rather than an endpoint: the three lines publish their metrics
-		// in different places -- 1.x as JSON on "/debug/vars", 2.x and 3.x as Prometheus
-		// text on "/metrics" -- and which one to read is decided from the version the
-		// server reports. See inputs/influxdb.
-		//
-		// The token is used by 3.x, which answers 401 everywhere without one; the user and
-		// password by 1.x.
-		if service.Config.StatsURL != "" {
-			input, gathererOptions, err = influxdb.New(
-				service.Config.StatsURL, service.Config.Username, service.Config.Password, service.Config.Password,
-			)
-		} else if ip, port := service.AddressPort(); ip != "" {
-			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
-			// The password is offered as both: 1.x authenticates with a user and a
-			// password, 3.x with a bearer token, and there is one field for either. A
-			// server only ever reads the one its line uses.
-			input, gathererOptions, err = influxdb.New(
-				url, service.Config.Username, service.Config.Password, service.Config.Password,
-			)
-		}
-	case JenkinsService:
-		if service.Config.StatsURL != "" && service.Config.Password != "" {
-			input, gathererOptions, err = jenkins.New(service.Config)
-		}
-	case MariaDBService:
-		input, err = createMariaDBInput(service)
-	case MemcachedService:
-		if ip, port := service.AddressPort(); ip != "" {
-			input, err = memcached.New(net.JoinHostPort(ip, strconv.Itoa(port)))
-		}
-	case MongoDBService:
-		if ip, port := service.AddressPort(); ip != "" {
-			input, err = mongodb.New("mongodb://" + net.JoinHostPort(ip, strconv.Itoa(port)))
-		}
-	case MySQLService:
-		input, err = createMySQLInput(service)
-	case NatsService:
-		// The default port of the monitoring server is 8222.
-		port := 8222
-
-		if service.Config.StatsPort != 0 {
-			port = service.Config.StatsPort
-		}
-
-		if ip := service.AddressForPort(port, tcpProtocol, true); ip != "" {
-			url := "http://" + net.JoinHostPort(service.IPAddress, strconv.Itoa(port))
-			input, gathererOptions, err = nats.New(url)
-		}
-	case NfsService:
-		input, gathererOptions, err = nfs.New()
-	case NginxService:
-		if ip, port := service.AddressPort(); ip != "" {
-			input, err = nginx.New(fmt.Sprintf("http://%s/nginx_status", net.JoinHostPort(ip, strconv.Itoa(port))))
-		}
-	case NSQService:
-		if service.Config.StatsURL != "" {
-			input, err = nsq.New(service.Config.StatsURL)
-		} else if ip, port := service.AddressPort(); ip != "" {
-			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
-			input, err = nsq.New(url)
-		}
-	case ChronyService:
-		if address, ok := chronyCmdAddress(service); ok {
-			input, gathererOptions, err = chrony.New(address)
-		} else {
-			logger.V(1).Printf(
-				"No address to read the chrony daemon of service '%s' on container '%s', not gathering its metrics",
-				service.Name, service.ContainerName,
-			)
-		}
-	case NTPService:
-		if address, ok := ntpdAddress(service); ok {
-			input, gathererOptions, err = ntp.New(address)
-		} else {
-			logger.V(1).Printf(
-				"No address to read the NTP daemon of service '%s' on container '%s', not gathering its metrics",
-				service.Name, service.ContainerName,
-			)
-		}
-	case OpenBaoService:
-		if service.Config.StatsURL != "" {
-			input, err = openbao.New(service.Config.StatsURL, service.Config.Password)
-		} else if ip, port := service.AddressPort(); ip != "" {
-			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
-			input, err = openbao.New(url, service.Config.Password)
-		}
-	case OpenLDAPService:
-		if ip, port := service.AddressPort(); ip != "" {
-			input, gathererOptions, err = openldap.New(ip, port, service.Config)
-		}
-	case PHPFPMService:
-		statsURL := urlForPHPFPM(service)
-		if statsURL != "" {
-			input, err = phpfpm.New(statsURL)
-		}
-	case PostgreSQLService:
-		if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
-			username := service.Config.Username
-			if username == "" {
-				username = "postgres"
-			}
-
-			address := fmt.Sprintf(
-				"host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable",
-				ip, port, username, service.Config.Password,
-			)
-			input, err = postgresql.New(address, service.Config.DetailedItems)
-		}
-	case PgBouncerService:
-		if ip, port := service.AddressPort(); ip != "" {
-			username := service.Config.Username
-			if username == "" {
-				username = "pgbouncer"
-			}
-
-			address := fmt.Sprintf(
-				"host=%s port=%d user=%s password=%s dbname=pgbouncer sslmode=disable",
-				ip, port, username, service.Config.Password,
-			)
-			gathererOptions.CompatibilityNameItem = false
-
-			input, err = pgbouncer.New(address)
-		}
-	case RabbitMQService:
-		mgmtPort := 15672
-		force := false
-
-		if service.Config.StatsPort != 0 {
-			mgmtPort = service.Config.StatsPort
-			force = true
-		}
-
-		if ip := service.AddressForPort(mgmtPort, tcpProtocol, force); ip != "" {
-			username := service.Config.Username
-			if username == "" {
-				username = "guest"
-			}
-
-			password := service.Config.Password
-			if password == "" {
-				password = "guest"
-			}
-
-			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(mgmtPort))
-			input, err = rabbitmq.New(url, username, password)
-		}
-	case RedisService, ValkeyService:
-		if ip, port := service.AddressPort(); ip != "" {
-			input, err = redis.New("tcp://"+net.JoinHostPort(ip, strconv.Itoa(port)), service.Config.Password)
-		}
-	case TomcatService:
-		// The manager webapp the metrics are read from requires a user with the
-		// "manager-status" role, so without credentials every gather would only get a
-		// 401 (or a 404 when the webapp isn't even deployed).
-		//
-		// Both credentials are required, not just the password: the plugin always sends
-		// basic auth, and Tomcat ships an empty tomcat-users.xml, so unlike ActiveMQ there
-		// is no factory account to fall back on -- a password alone could only ever 401.
-		hasCredentials := service.Config.Username != "" && service.Config.Password != ""
-		if !hasCredentials {
-			logger.V(1).Printf("No metrics for %s on instance %s: a username and a password are required", service.Name, service.Instance)
-		}
-
-		// One point per connector and per memory pool, all sharing their metric name, so
-		// the "name" telling them apart has to be a label of its own rather than the item,
-		// which is the service instance; see the renameGlobal of inputs/tomcat.
-		gathererOptions.CompatibilityNameItem = false
-
-		if service.Config.StatsURL != "" && hasCredentials {
-			input, err = tomcat.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
-		} else if ip, port := service.AddressPort(); ip != "" && hasCredentials {
-			url := fmt.Sprintf("http://%s/manager/status/all?XML=true", net.JoinHostPort(ip, strconv.Itoa(port)))
-			input, err = tomcat.New(url, service.Config.Username, service.Config.Password)
-		}
-	case UPSDService:
-		if ip, port := service.AddressPort(); ip != "" {
-			input, gathererOptions, err = upsd.New(ip, port, service.Config.Username, service.Config.Password)
-		}
-	case UWSGIService:
-		// The port used in the stats server documentation is 1717.
-		port := 1717
-
-		if service.Config.StatsPort != 0 {
-			port = service.Config.StatsPort
-		}
-
-		// The stats server can be exposed with TCP or HTTP
-		// (or a socket but we don't support it).
-		protocol := tcpProtocol
-		if service.Config.StatsProtocol != "" {
-			protocol = service.Config.StatsProtocol
-		}
-
-		if ip := service.AddressForPort(port, tcpProtocol, true); ip != "" {
-			url := fmt.Sprintf("%s://%s", protocol, net.JoinHostPort(ip, strconv.Itoa(port)))
-			input, gathererOptions, err = uwsgi.New(url)
-		}
-	case VarnishService:
-		// The input runs "varnishstat" rather than reading a port, since that is the only
-		// way Varnish publishes its counters: they live in a shared memory segment the
-		// daemon maps, with no socket in front of them. The agent image carries no
-		// varnishstat, so it comes from wherever the daemon is -- the machine for a
-		// Varnish installed on it, the container's own image for a containerised one.
-		//
-		// Not being able to read it means no input, rather than an input failing on every
-		// gather under that container's name.
-		if d.canReadVarnish(service) {
-			input, gathererOptions, err = varnish.New(d.commandRunner, d.containerInfo, service.ContainerID)
-		}
-	case VaultService:
-		if service.Config.StatsURL != "" {
-			input, err = vault.New(service.Config.StatsURL, service.Config.Password)
-		} else if ip, port := service.AddressPort(); ip != "" {
-			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
-			input, err = vault.New(url, service.Config.Password)
-		}
-	case ZookeeperService:
-		if ip, port := service.AddressPort(); ip != "" {
-			input, err = zookeeper.New(net.JoinHostPort(ip, strconv.Itoa(port)))
-		}
-	case CustomService:
-		return nil
-	default:
-		logger.V(1).Printf("service type %s don't support metrics", service.ServiceType)
+	switch {
+	case errors.Is(err, errMissingInfo):
+		return inputMissingInfo, nil
+	case errors.Is(err, errMissingCommand):
+		return inputMissingCommand, nil
 	}
 
 	// An input that says it is disabled isn't a failure to report on every discovery run:
@@ -628,20 +335,25 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	if errors.Is(err, inputs.ErrDisabledInput) {
 		logger.V(1).Printf("No input for service %s on this platform: %v", service.Name, err)
 
-		return nil
+		return inputUnsupportedPlatform, nil
 	}
 
 	if err != nil {
-		return err
+		return inputCreateFailed, err
 	}
 
+	// A builder says why it has no input: one that does not is a bug, not missing credentials.
 	if input == nil {
-		return nil
+		return inputCreateFailed, fmt.Errorf("%w: no input built for %s", errNoInputBuilt, service.ServiceType)
 	}
 
 	logger.V(2).Printf("Add input for service %v instance %s", service.Name, service.Instance)
 
-	return d.registerInput(input, gathererOptions, service)
+	if err := d.registerInput(input, gathererOptions, service); err != nil {
+		return inputCreateFailed, err
+	}
+
+	return inputRegistered, nil
 }
 
 func createMySQLInput(service Service) (telegraf.Input, error) {
@@ -663,7 +375,7 @@ func createMySQLInput(service Service) (telegraf.Input, error) {
 		return mysql.New(fmt.Sprintf("%s:%s@tcp(%s)/", username, service.Config.Password, net.JoinHostPort(ip, strconv.Itoa(port))))
 	}
 
-	return nil, nil //nolint: nilnil
+	return nil, errMissingInfo
 }
 
 func createMariaDBInput(service Service) (telegraf.Input, error) {
@@ -685,7 +397,7 @@ func createMariaDBInput(service Service) (telegraf.Input, error) {
 		return mysql.NewMariaDB(fmt.Sprintf("%s:%s@tcp(%s)/", username, service.Config.Password, net.JoinHostPort(ip, strconv.Itoa(port))))
 	}
 
-	return nil, nil //nolint: nilnil
+	return nil, errMissingInfo
 }
 
 func (d *Discovery) registerInput(input telegraf.Input, opts registry.RegistrationOption, service Service) error {

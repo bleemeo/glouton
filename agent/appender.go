@@ -115,6 +115,7 @@ type miscAppenderMinute struct {
 	store             *store.Store
 	runner            *gloutonexec.Runner
 	getConfigWarnings func() prometheus.MultiError
+	queueSizeState    *queueSizeState
 }
 
 func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registry.GatherState, app storage.Appender) error {
@@ -124,65 +125,52 @@ func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registr
 	}
 
 	service, _ := ma.discovery.GetLatestDiscovery()
+	queueErrors := make(map[discovery.NameInstance]string)
 
 	for _, srv := range service {
-		if !srv.Active {
+		// Disabled metrics are disabled for every collection, not only for inputs.
+		if !srv.Active || srv.MetricsIgnored {
 			continue
 		}
 
-		switch srv.ServiceType { //nolint:exhaustive,nolintlint
-		case discovery.PostfixService:
-			n, err := postfixQueueSize(ctx, srv, ma.runner, ma.containerRuntime)
-			if err != nil {
-				logger.V(1).Printf("Unabled to gather postfix queue size on %s: %v", srv, err)
-
-				continue
-			}
-
-			labels := map[string]string{
-				types.LabelName: "postfix_queue_size",
-				types.LabelItem: srv.Instance,
-			}
-
-			annotations := types.MetricAnnotations{
-				ContainerID:     srv.ContainerID,
-				ServiceName:     srv.Name,
-				ServiceInstance: srv.Instance,
-			}
-
-			points = append(points, types.MetricPoint{
-				Labels:      labels,
-				Annotations: annotations,
-				Time:        time.Now(),
-				Value:       n,
-			})
-		case discovery.EximService:
-			n, err := eximQueueSize(ctx, srv, ma.runner, ma.containerRuntime)
-			if err != nil {
-				logger.V(1).Printf("Unabled to gather exim queue size on %s: %v", srv, err)
-
-				continue
-			}
-
-			labels := map[string]string{
-				types.LabelName: "exim_queue_size",
-				types.LabelItem: srv.Instance,
-			}
-
-			annotations := types.MetricAnnotations{
-				ContainerID:     srv.ContainerID,
-				ServiceName:     srv.Name,
-				ServiceInstance: srv.Instance,
-			}
-
-			points = append(points, types.MetricPoint{
-				Labels:      labels,
-				Annotations: annotations,
-				Time:        time.Now(),
-				Value:       n,
-			})
+		gatherer, ok := queueSizeGatherers[srv.ServiceType]
+		if !ok {
+			continue
 		}
+
+		key := discovery.NameInstance{Name: srv.Name, Instance: srv.Instance}
+
+		n, err := gatherer.gather(ctx, srv, ma.runner, ma.containerRuntime)
+		if err != nil {
+			logger.V(1).Printf("Unable to gather %s on %s: %v", gatherer.metric, srv, err)
+
+			queueErrors[key] = err.Error()
+
+			continue
+		}
+
+		queueErrors[key] = ""
+
+		labels := map[string]string{
+			types.LabelName: gatherer.metric,
+			types.LabelItem: srv.Instance,
+		}
+
+		annotations := types.MetricAnnotations{
+			ContainerID:     srv.ContainerID,
+			ServiceName:     srv.Name,
+			ServiceInstance: srv.Instance,
+		}
+
+		points = append(points, types.MetricPoint{
+			Labels:      labels,
+			Annotations: annotations,
+			Time:        time.Now(),
+			Value:       n,
+		})
 	}
+
+	ma.queueSizeState.set(queueErrors)
 
 	desc := ma.getConfigWarnings().Error()
 	status := types.StatusWarning

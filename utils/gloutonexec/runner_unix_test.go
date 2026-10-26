@@ -19,6 +19,8 @@ package gloutonexec
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os/exec"
 	"testing"
 	"time"
 )
@@ -141,5 +143,54 @@ func TestGraceDelay(t *testing.T) {
 				t.Errorf("out = %q, want = %q", out, tt.WantOut)
 			}
 		})
+	}
+}
+
+// TestRunErrorHasStderr checks a failed command's error says why, from the first line of its
+// stderr, and still wraps the exit error.
+func TestRunErrorHasStderr(t *testing.T) {
+	t.Parallel()
+
+	runner := New("/")
+
+	_, err := runner.Run(t.Context(), Option{}, "sh", "-c", "echo 'postqueue: fatal: mail system is down' >&2; echo more >&2; exit 69")
+
+	if got, want := fmt.Sprint(err), "exit status 69: postqueue: fatal: mail system is down"; got != want {
+		t.Errorf("Run() error = %q, want %q", got, want)
+	}
+
+	if exitErr := new(exec.ExitError); !errors.As(err, &exitErr) {
+		t.Errorf("Run() error %v does not wrap the exit error", err)
+	}
+
+	// With CombinedOutput, stderr is in the output: the error is the exit status alone, which
+	// callers such as the Nagios checks read the exit code of.
+	out, err := runner.Run(t.Context(), Option{CombinedOutput: true}, "sh", "-c", "echo out; echo err >&2; exit 3")
+	if fmt.Sprint(err) != "exit status 3" || string(out) != "out\nerr\n" {
+		t.Errorf("Run() with CombinedOutput = %q, %q; want the output and the exit status alone", out, err)
+	}
+
+	// Without stderr, the error is the exit status alone.
+	if _, err := runner.Run(t.Context(), Option{}, "sh", "-c", "exit 4"); fmt.Sprint(err) != "exit status 4" {
+		t.Errorf("Run() without stderr error = %q, want the exit status alone", err)
+	}
+}
+
+// TestRunErrorHasFullStderr checks FullStderr keeps every line a failed command wrote on stderr,
+// for a command writing one per failed item.
+func TestRunErrorHasFullStderr(t *testing.T) {
+	t.Parallel()
+
+	runner := New("/")
+	script := "echo 'cannot open /proc/12/ns/net' >&2; echo 'cannot open /proc/34/ns/net' >&2; exit 1"
+
+	_, err := runner.Run(t.Context(), Option{FullStderr: true}, "sh", "-c", script)
+
+	if got, want := fmt.Sprint(err), "exit status 1: cannot open /proc/12/ns/net\ncannot open /proc/34/ns/net"; got != want {
+		t.Errorf("Run() error = %q, want %q", got, want)
+	}
+
+	if exitErr := new(exec.ExitError); !errors.As(err, &exitErr) {
+		t.Errorf("Run() error %v does not wrap the exit error", err)
 	}
 }

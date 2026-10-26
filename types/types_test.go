@@ -264,3 +264,17 @@ func BenchmarkTextToLabels(b *testing.B) {
 		}
 	}
 }
+
+// TestScrapeStatusString checks each status prints as words, as test failures and logs show it.
+func TestScrapeStatusString(t *testing.T) {
+	for status, want := range map[ScrapeStatus]string{
+		ScrapeNotRun:    "not run",
+		ScrapeSkipped:   "skipped",
+		ScrapeRan:       "ran",
+		ScrapeStatus(9): "ScrapeStatus(9)",
+	} {
+		if got := status.String(); got != want {
+			t.Errorf("ScrapeStatus(%d).String() = %q, want %q", int(status), got, want)
+		}
+	}
+}

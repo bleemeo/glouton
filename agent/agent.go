@@ -1090,6 +1090,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			Pusher:                        a.gathererRegistry.WithTTL(5 * time.Minute),
 		}
 
+		a.discovery.SetJMXState(a.jmx)
+
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
 	}
 
@@ -1302,6 +1304,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		logger.Printf("unable to add miscAppender metrics: %v", err)
 	}
 
+	// The mail queue sizes it gathers are the only metrics of their service types: discovery
+	// reports those types as supported, with the gathers' errors.
+	queueState := &queueSizeState{}
+	a.discovery.SetAgentGathererState(queueState)
+
 	// Register misc appender minute to gather some various metrics
 	// from containers, services and config warnings.
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
@@ -1318,6 +1325,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			store:             a.store,
 			runner:            a.commandRunner,
 			getConfigWarnings: a.getWarnings,
+			queueSizeState:    queueState,
 		},
 	)
 	if err != nil {

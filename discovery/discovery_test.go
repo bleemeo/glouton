@@ -1695,7 +1695,7 @@ func TestRemoveIfNonRunningDuringDiscovery(t *testing.T) {
 
 	dd.hang.Store(true)
 
-	// Run is now in a discovery that hangs until release is closed.
+	// Run takes this trigger and enters a discovery that hangs until release is closed.
 	disc.triggerDiscovery <- nil
 
 	time.AfterFunc(200*time.Millisecond, func() { close(dd.release) })
@@ -1711,5 +1711,163 @@ func TestRemoveIfNonRunningDuringDiscovery(t *testing.T) {
 	case <-done:
 	case <-time.After(10 * time.Second):
 		t.Fatal("RemoveIfNonRunning is still blocked after the discovery ended")
+	}
+}
+
+// newRemovalTestDiscovery returns a discovery that found memcached running, with its input
+// and its check registered on reg.
+func newRemovalTestDiscovery(t *testing.T) (*Discovery, *MockDiscoverer, *mockRegistry) {
+	t.Helper()
+
+	reg := &mockRegistry{ExpectedAddedContains: []string{testMemcached, testMemcached}}
+	mockDynamic := &MockDiscoverer{}
+	mockDynamic.SetResult([]Service{{
+		Name:            testMemcached,
+		ServiceType:     MemcachedService,
+		IPAddress:       testIP127001,
+		ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
+		Active:          true,
+	}}, nil)
+
+	disc, _ := New(mockDynamic, gloutonexec.New("/"), reg, mockState{}, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, nil, time.Hour, config.OpenTelemetry{})
+	disc.containerInfo = mockContainerInfo{}
+
+	if _, _, err := disc.discovery(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	if reg.err != nil || len(reg.GetAllRegistrations()) != 2 {
+		t.Fatalf("memcached got %d registrations (err %v), want its input and its check", len(reg.GetAllRegistrations()), reg.err)
+	}
+
+	return disc, mockDynamic, reg
+}
+
+// TestRemoveIfNonRunningUnregisters checks a removed service that no longer runs loses its
+// input and its check at the next discovery: the services last configured must not lose it
+// along with the current ones.
+func TestRemoveIfNonRunningUnregisters(t *testing.T) {
+	disc, mockDynamic, reg := newRemovalTestDiscovery(t)
+
+	mockDynamic.SetResult(nil, nil)
+	disc.RemoveIfNonRunning([]Service{{Name: testMemcached}})
+
+	if _, _, err := disc.discovery(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, row := range reg.GetAllRegistrations() {
+		if !row.unregisterWasCalled {
+			t.Errorf("%s is still registered after its service was removed", row.opt.Description)
+		}
+	}
+
+	if _, ok := disc.inputResult[NameInstance{Name: testMemcached}]; ok {
+		t.Error("the removed service still has an input result")
+	}
+}
+
+// TestRemoveIfNonRunningDuringUpdate removes a service while a discovery works on its copy of
+// the discovered services: the removal must hold, rather than the copy bringing it back.
+func TestRemoveIfNonRunningDuringUpdate(t *testing.T) {
+	disc, mockDynamic, _ := newRemovalTestDiscovery(t)
+
+	// isServiceIgnored runs on each service found, after the copy and before the write-back.
+	var once sync.Once
+
+	disc.isServiceIgnored = func(Service) bool {
+		once.Do(func() { disc.RemoveIfNonRunning([]Service{{Name: testMemcached}}) })
+
+		return false
+	}
+
+	mockDynamic.SetResult([]Service{{Name: "redis", ServiceType: RedisService, IPAddress: testIP127001, Active: true, CheckIgnored: true}}, nil)
+
+	if _, err := disc.updateDiscovery(t.Context(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	key := NameInstance{Name: testMemcached}
+
+	if _, ok := disc.discoveredServicesMap[key]; ok {
+		t.Error("the removed service is back in the discovered services")
+	}
+
+	if _, ok := disc.servicesMap[key]; ok {
+		t.Error("the removed service is back in the services")
+	}
+
+	if _, ok := disc.servicesMap[NameInstance{Name: "redis"}]; !ok {
+		t.Error("the service found running is missing")
+	}
+}
+
+// TestRemoveIfNonRunningRunningKept checks a removal during a discovery leaves a service that
+// discovery found running: only the persisted entry goes.
+func TestRemoveIfNonRunningRunningKept(t *testing.T) {
+	disc, _, _ := newRemovalTestDiscovery(t)
+
+	var once sync.Once
+
+	disc.isServiceIgnored = func(Service) bool {
+		once.Do(func() { disc.RemoveIfNonRunning([]Service{{Name: testMemcached}}) })
+
+		return false
+	}
+
+	if _, err := disc.updateDiscovery(t.Context(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := disc.servicesMap[NameInstance{Name: testMemcached}]; !ok {
+		t.Error("a service found running was removed")
+	}
+}
+
+// TestRemoveIfNonRunningWithoutRun checks removals do not block once Run has stopped, as on
+// shutdown: nothing receives the trigger any more.
+func TestRemoveIfNonRunningWithoutRun(t *testing.T) {
+	disc, mockDynamic, _ := newRemovalTestDiscovery(t)
+	mockDynamic.SetResult(nil, nil)
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		// Twice: the first trigger fills the channel's buffer.
+		disc.RemoveIfNonRunning([]Service{{Name: testMemcached}})
+		disc.l.Lock()
+		disc.servicesMap[NameInstance{Name: testMemcached}] = Service{Name: testMemcached, Active: true}
+		disc.l.Unlock()
+		disc.RemoveIfNonRunning([]Service{{Name: testMemcached}})
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("RemoveIfNonRunning blocks without Run")
+	}
+}
+
+// TestLastDiscoveryAt checks LastDiscoveryAt follows GetLatestDiscovery's time from the first
+// discovery on, though reconfigure publishes the snapshot before that time is known.
+func TestLastDiscoveryAt(t *testing.T) {
+	mockDynamic := &MockDiscoverer{}
+	disc, _ := New(mockDynamic, gloutonexec.New("/"), &mockRegistry{}, mockState{}, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, nil, time.Hour, config.OpenTelemetry{})
+	disc.containerInfo = mockContainerInfo{}
+
+	if got := disc.LastDiscoveryAt(); !got.IsZero() {
+		t.Errorf("before any discovery, LastDiscoveryAt() = %v, want zero", got)
+	}
+
+	if _, _, err := disc.discovery(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	_, want := disc.GetLatestDiscovery()
+
+	if got := disc.LastDiscoveryAt(); want.IsZero() || !got.Equal(want) {
+		t.Errorf("LastDiscoveryAt() = %v, want %v", got, want)
 	}
 }

@@ -19,16 +19,20 @@ package agent
 import (
 	"context"
 	"errors"
+	"maps"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 )
 
 var (
-	errRunInContainer   = errors.New("can't gather the postfix running on host because Glouton run in a container")
+	errRunInContainer   = errors.New("can't gather the queue size of a mail server running on the host because Glouton runs in a container")
 	errUnexpectedOutput = errors.New("postqueue output don't contains expected output")
 )
 
@@ -43,6 +47,78 @@ var (
 
 type dockerExecuter interface {
 	Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error)
+}
+
+// queueSizeGatherer gathers the size of a mail server's queue, the one metric the agent
+// collects itself for that service type, as no input does.
+type queueSizeGatherer struct {
+	metric string
+	gather func(ctx context.Context, srv discovery.Service, runner *gloutonexec.Runner, docker dockerExecuter) (float64, error)
+}
+
+// queueSizeGatherers are the service types whose metric the agent gathers itself.
+var queueSizeGatherers = map[discovery.ServiceName]queueSizeGatherer{ //nolint:gochecknoglobals
+	discovery.PostfixService: {metric: "postfix_queue_size", gather: postfixQueueSize},
+	discovery.EximService:    {metric: "exim_queue_size", gather: eximQueueSize},
+}
+
+// queueStateRuns is how many recent gathers of a service queueSizeState considers, as the
+// registry does for an input: a gather failing one minute in two reads as failing rather than
+// alternating.
+const queueStateRuns = 3
+
+// queueSizeState records how the recent gathers of each service's queue size went, so that
+// discovery reports these services as supported, with their error. It implements
+// discovery.AgentGathererStateProvider.
+type queueSizeState struct {
+	l sync.Mutex
+	// errors are the errors of each service's last queueStateRuns gathers, oldest first, empty
+	// for a gather that succeeded. A service not gathered yet is absent.
+	errors map[discovery.NameInstance][]string
+}
+
+func (s *queueSizeState) ServiceTypes() []discovery.ServiceName {
+	return slices.Sorted(maps.Keys(queueSizeGatherers))
+}
+
+// ServiceScrapeState returns the most recent error of the service's last queueStateRuns gathers.
+func (s *queueSizeState) ServiceScrapeState(service discovery.NameInstance) types.ScrapeState {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	runs, ok := s.errors[service]
+	if !ok {
+		return types.ScrapeState{}
+	}
+
+	state := types.ScrapeState{Status: types.ScrapeRan}
+
+	for _, message := range runs {
+		if message != "" {
+			state.Error = message
+		}
+	}
+
+	return state
+}
+
+// set records the services gathered in one run, forgetting the others.
+func (s *queueSizeState) set(errors map[discovery.NameInstance]string) {
+	if s == nil {
+		return
+	}
+
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	recent := make(map[discovery.NameInstance][]string, len(errors))
+
+	for service, message := range errors {
+		runs := append(slices.Clone(s.errors[service]), message)
+		recent[service] = runs[max(0, len(runs)-queueStateRuns):]
+	}
+
+	s.errors = recent
 }
 
 func postfixQueueSize(ctx context.Context, srv discovery.Service, runner *gloutonexec.Runner, docker dockerExecuter) (float64, error) {

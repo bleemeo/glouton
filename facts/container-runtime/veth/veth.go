@@ -19,9 +19,7 @@ package veth
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -148,14 +146,10 @@ func (p *Provider) updateCache() error {
 	}
 
 	// Get the container interface indexes.
-	stdout, err := p.Runner.Run(ctx, gloutonexec.Option{RunAsRoot: true}, "/usr/lib/glouton/glouton-veths", pids...)
+	// The script writes one line on stderr per container it could not read: keep them all.
+	stdout, err := p.Runner.Run(ctx, gloutonexec.Option{RunAsRoot: true, FullStderr: true}, "/usr/lib/glouton/glouton-veths", pids...)
 	if err != nil {
-		stderr := ""
-		if exitErr := &(exec.ExitError{}); errors.As(err, &exitErr) {
-			stderr = string(exitErr.Stderr)
-		}
-
-		return fmt.Errorf("%w: %s", err, stderr)
+		return err
 	}
 
 	interfaceIndexByPID := parseOutput(string(stdout))

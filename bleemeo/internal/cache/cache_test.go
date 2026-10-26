@@ -19,9 +19,11 @@ package cache
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/discovery"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -192,4 +194,62 @@ func floatToPointer(f float64) *float64 {
 	*v = f
 
 	return v
+}
+
+// TestRegistrationStatusSentPersists checks what was last sent of the registration status
+// survives a save and a reload, so a restart does not re-send an unchanged value or read
+// every service as new.
+func TestRegistrationStatusSentPersists(t *testing.T) {
+	st, err := state.LoadReadOnly("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := types.RegistrationStatusSent{
+		Hash:              "c0ffee",
+		Services:          []discovery.NameInstance{{Name: "apache"}, {Name: "redis", Instance: "cache"}},
+		AcceptedAt:        time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC),
+		LastAttemptAt:     time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC),
+		LastAttemptFailed: true,
+	}
+
+	cache := Load(st)
+	cache.SetRegistrationStatusSent(want)
+	cache.Save()
+
+	got := Load(st).RegistrationStatusSent()
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("RegistrationStatusSent() after reload mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestRegistrationStatusSentIsCopied checks the cache does not share its slice with callers.
+func TestRegistrationStatusSentIsCopied(t *testing.T) {
+	cache := &Cache{}
+
+	sent := types.RegistrationStatusSent{Services: []discovery.NameInstance{{Name: "apache"}}}
+	cache.SetRegistrationStatusSent(sent)
+
+	sent.Services[0].Name = "changed after set"
+
+	got := cache.RegistrationStatusSent()
+	got.Services[0].Name = "changed after get"
+
+	if name := cache.RegistrationStatusSent().Services[0].Name; name != "apache" {
+		t.Errorf("the cached value was changed from outside: %q", name)
+	}
+}
+
+// TestRegistrationStatusSentFromOldCache checks a cache written before the field existed loads,
+// with nothing recorded as sent.
+func TestRegistrationStatusSentFromOldCache(t *testing.T) {
+	st, err := state.Load("testdata/state-v6.json", "testdata/state-v6.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := Load(st).RegistrationStatusSent(); got.Hash != "" || len(got.Services) != 0 {
+		t.Errorf("got %+v from a cache without the field, want nothing sent", got)
+	}
 }

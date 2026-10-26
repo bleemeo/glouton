@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -37,19 +39,20 @@ import (
 type EntityName string
 
 const (
-	EntityConfig        EntityName = "config"
-	EntityAgent         EntityName = "agent"
-	EntityApplication   EntityName = "application"
-	EntityGloutonConfig EntityName = "gloutonconfig"
-	EntityContainer     EntityName = "container"
-	EntityDiagnostics   EntityName = "diagnostics"
-	EntityFact          EntityName = "facts"
-	EntityInfo          EntityName = "info"
-	EntityMetric        EntityName = "metric"
-	EntityMonitor       EntityName = "monitor"
-	EntityService       EntityName = "service"
-	EntitySNMP          EntityName = "snmp"
-	EntityVSphere       EntityName = "vsphere"
+	EntityConfig             EntityName = "config"
+	EntityAgent              EntityName = "agent"
+	EntityApplication        EntityName = "application"
+	EntityGloutonConfig      EntityName = "gloutonconfig"
+	EntityContainer          EntityName = "container"
+	EntityDiagnostics        EntityName = "diagnostics"
+	EntityFact               EntityName = "facts"
+	EntityInfo               EntityName = "info"
+	EntityMetric             EntityName = "metric"
+	EntityMonitor            EntityName = "monitor"
+	EntityService            EntityName = "service"
+	EntityRegistrationStatus EntityName = "registrationstatus"
+	EntitySNMP               EntityName = "snmp"
+	EntityVSphere            EntityName = "vsphere"
 )
 
 type SyncType int
@@ -98,6 +101,29 @@ func (t APIFeature) String() string {
 }
 
 var ErrUnexpectedWorkflow = errors.New("unexpected synchronization workflow")
+
+// IsBadRequest returns true if the error is an APIError due to 400.
+func IsBadRequest(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode == http.StatusBadRequest
+	}
+
+	return false
+}
+
+// IsRefusedValue tells whether the API, or a proxy in front of it, refused the value sent itself:
+// invalid (400, 422) or too large (413). Other errors, such as an authentication error or
+// throttling, are the synchronizer's to handle.
+func IsRefusedValue(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		switch apiError.StatusCode {
+		case http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity:
+			return true
+		}
+	}
+
+	return false
+}
 
 type EntitySynchronizer interface {
 	Name() EntityName
@@ -213,6 +239,8 @@ type ConfigClient interface {
 type AgentClient interface {
 	ListAgents(ctx context.Context) ([]bleemeoTypes.Agent, error)
 	UpdateAgent(ctx context.Context, id string, data any) (bleemeoTypes.Agent, error)
+	// UpdateAgentRegistrationStatus sets the Agent's registration_status.
+	UpdateAgentRegistrationStatus(ctx context.Context, id string, state any) error
 	UpdateAgentLastDuplicationDate(ctx context.Context, agentID string, lastDuplicationDate time.Time) error
 }
 

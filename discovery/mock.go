@@ -26,6 +26,8 @@ type MockDiscoverer struct {
 	result    []Service
 	err       error
 	UpdatedAt time.Time
+	// States is what ServicesState returns.
+	States []ServiceState
 }
 
 // SetResult fill result of Discovery.
@@ -44,5 +46,15 @@ func (md *MockDiscoverer) GetLatestDiscovery() ([]Service, time.Time) {
 	return md.result, md.UpdatedAt
 }
 
+// LastDiscoveryAt implements PersistentDiscoverer.
+func (md *MockDiscoverer) LastDiscoveryAt() time.Time {
+	return md.UpdatedAt
+}
+
 // RemoveIfNonRunning implements PersistentDiscoverer.
 func (md *MockDiscoverer) RemoveIfNonRunning([]Service) {}
+
+// ServicesState implements PersistentDiscoverer.
+func (md *MockDiscoverer) ServicesState() []ServiceState {
+	return md.States
+}

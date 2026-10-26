@@ -196,6 +196,9 @@ type GloutonAccountConfig struct {
 	AgentConfigByName      map[bleemeo.AgentType]GloutonAgentConfig
 	AgentConfigByID        map[string]GloutonAgentConfig
 	MaxCustomMetrics       int
+	// SendRegistrationStatus is true only when the account's config is the boolean true: a
+	// missing config disables the feature.
+	SendRegistrationStatus bool
 }
 
 type GloutonAgentConfig struct {

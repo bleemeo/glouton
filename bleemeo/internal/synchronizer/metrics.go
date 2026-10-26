@@ -17,12 +17,14 @@
 package synchronizer
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"maps"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -337,23 +339,91 @@ func (s *Synchronizer) metricKey(lbls map[string]string, annotations gloutonType
 	return metricutils.MetricKey(lbls, annotations, s.agentID)
 }
 
-// filterMetrics only keeps the points that can be registered.
+// metricStateKey groups not-registered metrics by name and reason. The item and other labels
+// are dropped, or the list would be as large as the metrics themselves.
+type metricStateKey struct {
+	Name   string
+	Reason bleemeoTypes.MetricStateReason
+}
+
+// countNotRegistered records one metric that will not be registered. Must not be called
+// with s.l held: logThrottle takes it.
+func (s *Synchronizer) countNotRegistered(
+	counts map[metricStateKey]int,
+	metric gloutonTypes.Metric,
+	reason bleemeoTypes.MetricStateReason,
+) {
+	if !s.isOwnMetric(metric) {
+		return
+	}
+
+	name := metric.Labels()[gloutonTypes.LabelName]
+	if name == "" {
+		// Nothing to group it under: say so in the log rather than drop it silently.
+		s.logThrottle("metric-without-name", 1, fmt.Sprintf(
+			"A metric without a %s label was not registered (reason %s, labels %v). "+
+				"It cannot be reported to Bleemeo.",
+			gloutonTypes.LabelName, reason, metric.Labels(),
+		))
+
+		return
+	}
+
+	counts[metricStateKey{Name: name, Reason: reason}]++
+}
+
+// isOwnMetric tells whether a metric belongs to this agent. The metrics state is reported on
+// this Agent by name only, so another agent's would read as this one's.
+func (s *Synchronizer) isOwnMetric(metric gloutonTypes.Metric) bool {
+	return common.IsOwnMetric(metric.Annotations(), s.agentID)
+}
+
+// filterMetrics only keeps the points that can be registered, and records why it drops the
+// others: they reach neither registration nor the registration failures, so nothing else
+// would tell Bleemeo about them.
 func (s *Synchronizer) filterMetrics(input []gloutonTypes.Metric) []gloutonTypes.Metric {
 	result := make([]gloutonTypes.Metric, 0)
 
-	f := filter.NewFilter(s.option.Cache)
+	notRegistered := make(map[metricStateKey]int)
+
+	// Without the account configuration nothing can be registered. The filter would then
+	// fail every metric as "error-occurred", so record the real cause instead.
+	cfg, ok := s.option.Cache.CurrentAccountConfig()
+	if !ok {
+		for _, m := range input {
+			s.countNotRegistered(notRegistered, m, bleemeoTypes.ReasonWaitingAccountConfig)
+		}
+
+		s.l.Lock()
+		s.stagedNotRegistered = notRegistered
+		s.l.Unlock()
+
+		return nil
+	}
+
+	// Built from the configuration read above: reading it again could get another one, and
+	// the filter would decide from a configuration the check above did not see.
+	f := filter.NewFilterWithConfig(s.option.Cache, cfg)
 
 	for _, m := range input {
 		allow, denyReason, err := f.IsAllowed(m.Labels(), m.Annotations())
 		if err != nil {
 			logger.V(2).Printf("sync: %s", err)
 
+			s.countNotRegistered(notRegistered, m, bleemeoTypes.ReasonErrorOccurred)
+
 			continue
 		}
 
 		if allow {
 			result = append(result, m)
-		} else if denyReason == bleemeoTypes.DenyItemTooLong {
+
+			continue
+		}
+
+		s.countNotRegistered(notRegistered, m, denyReason.MetricStateReason())
+
+		if denyReason == bleemeoTypes.DenyItemTooLong {
 			msg := fmt.Sprintf(
 				"Metric %s will be ignored because the item '%s' is too long (> %d characters)",
 				m.Labels()[gloutonTypes.LabelName], m.Labels()[gloutonTypes.LabelItem], common.APIMetricItemLength,
@@ -363,20 +433,27 @@ func (s *Synchronizer) filterMetrics(input []gloutonTypes.Metric) []gloutonTypes
 		}
 	}
 
-	return s.excludeUnregistrableMetrics(result)
+	result = s.excludeUnregistrableMetrics(result, cfg, notRegistered)
+
+	// Staged: publishMetricsState publishes it with the registration half, from the same run.
+	s.l.Lock()
+	s.stagedNotRegistered = notRegistered
+	s.l.Unlock()
+
+	return result
 }
 
 // excludeUnregistrableMetrics remove metrics that cannot be registered, due to either
 // a missing dependency (like a container that must be registered before) or an item too long.
-func (s *Synchronizer) excludeUnregistrableMetrics(metrics []gloutonTypes.Metric) []gloutonTypes.Metric {
+// cfg is the account configuration filterMetrics read.
+func (s *Synchronizer) excludeUnregistrableMetrics(
+	metrics []gloutonTypes.Metric,
+	cfg bleemeoTypes.GloutonAccountConfig,
+	notRegistered map[metricStateKey]int,
+) []gloutonTypes.Metric {
 	result := make([]gloutonTypes.Metric, 0, len(metrics))
 	containersByContainerID := s.option.Cache.ContainersByContainerID()
 	servicesByKey := s.option.Cache.ServiceLookupFromList()
-
-	cfg, ok := s.option.Cache.CurrentAccountConfig()
-	if !ok {
-		return nil
-	}
 
 	for _, metric := range metrics {
 		annotations := metric.Annotations()
@@ -385,6 +462,8 @@ func (s *Synchronizer) excludeUnregistrableMetrics(metrics []gloutonTypes.Metric
 		if annotations.ContainerID != "" && !common.IgnoreContainer(cfg, metric.Labels()) {
 			_, ok := containersByContainerID[annotations.ContainerID]
 			if !ok {
+				s.countNotRegistered(notRegistered, metric, bleemeoTypes.ReasonWaitingContainer)
+
 				continue
 			}
 		}
@@ -394,6 +473,8 @@ func (s *Synchronizer) excludeUnregistrableMetrics(metrics []gloutonTypes.Metric
 			srvKey := common.ServiceNameInstance{Name: annotations.ServiceName, Instance: annotations.ServiceInstance}
 
 			if _, ok := servicesByKey[srvKey]; !ok {
+				s.countNotRegistered(notRegistered, metric, bleemeoTypes.ReasonWaitingService)
+
 				continue
 			}
 		}
@@ -419,6 +500,96 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []gloutonTypes.Metric) []
 	}
 
 	return result
+}
+
+// findUnregisteredMetricsWithKeys is findUnregisteredMetrics also returning each metric's key,
+// so that publishMetricsState does not build the labels text again.
+func (s *Synchronizer) findUnregisteredMetricsWithKeys(metrics []gloutonTypes.Metric) ([]gloutonTypes.Metric, []string) {
+	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
+
+	result := make([]gloutonTypes.Metric, 0)
+	keys := make([]string, 0)
+
+	for _, v := range metrics {
+		key := s.metricKey(v.Labels(), v.Annotations())
+		if _, ok := registeredMetricsByKey[key]; ok {
+			continue
+		}
+
+		result = append(result, v)
+		keys = append(keys, key)
+	}
+
+	return result, keys
+}
+
+// publishMetricsState makes this synchronization's report live: the metrics filterMetrics
+// staged, and the unregistered ones given here, each counted with its registration failure,
+// or as pending. It starts from the metrics Glouton has, not the failure cache, which keeps
+// entries for metrics long gone or now dropped by the filter.
+func (s *Synchronizer) publishMetricsState(unregistered []gloutonTypes.Metric, keys []string) {
+	failedByKey := s.option.Cache.MetricRegistrationsFailByKey()
+	registration := make(map[metricStateKey]int)
+
+	for i, metric := range unregistered {
+		name := metric.Labels()[gloutonTypes.LabelName]
+		if name == "" || !s.isOwnMetric(metric) {
+			continue
+		}
+
+		reason := bleemeoTypes.ReasonPending
+
+		if failure, failed := failedByKey[keys[i]]; failed {
+			reason = failure.LastFailKind.MetricStateReason()
+		}
+
+		registration[metricStateKey{Name: name, Reason: reason}]++
+	}
+
+	// Both halves together, so that a run failing in between cannot mix two runs.
+	s.l.Lock()
+	s.notRegisteredMetrics = s.stagedNotRegistered
+	s.registrationMetrics = registration
+	s.metricsStatePublished = true
+	s.l.Unlock()
+}
+
+// metricsState returns the metrics of this agent that Glouton has but did not register, grouped
+// by name and reason: dropped by the filter, waiting for the account configuration or a
+// dependency, pending, or refused by the API. It is sorted, as the list is kept synchronized
+// with the API. It also tells whether a synchronization published the state yet: until one
+// does, it is empty for lack of a run, not because every metric is registered.
+func (s *Synchronizer) metricsState() ([]bleemeoTypes.MetricState, bool) {
+	counts := make(map[metricStateKey]int)
+
+	s.l.Lock()
+
+	published := s.metricsStatePublished
+
+	maps.Copy(counts, s.notRegisteredMetrics)
+
+	// Added rather than set: both may hold a reason such as "unknown" for the same name.
+	for key, count := range s.registrationMetrics {
+		counts[key] += count
+	}
+
+	s.l.Unlock()
+
+	result := make([]bleemeoTypes.MetricState, 0, len(counts))
+
+	for key, count := range counts {
+		result = append(result, bleemeoTypes.MetricState{
+			Name:   key.Name,
+			Reason: key.Reason,
+			Count:  count,
+		})
+	}
+
+	slices.SortFunc(result, func(a, b bleemeoTypes.MetricState) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Reason, b.Reason))
+	})
+
+	return result, published
 }
 
 func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
@@ -503,8 +674,14 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 	}
 
 	if execution.IsOnlyEssential() {
+		// filteredMetrics was trimmed to the essential metrics, so it is not a picture of
+		// what this agent has. Leave the previous counts alone rather than under-report.
 		return updateThresholds, nil
 	}
+
+	// After registerMetrics, which records the failures this relies on: a metric that just
+	// failed would otherwise be counted as pending too.
+	s.publishMetricsState(s.findUnregisteredMetricsWithKeys(filteredMetrics))
 
 	if err := s.metricDeleteIgnoredServices(ctx, apiClient); err != nil {
 		return updateThresholds, err
@@ -1068,7 +1245,7 @@ func (mr *metricRegisterer) doOnePass(ctx context.Context, currentList []glouton
 				return err
 			}
 
-			if IsBadRequest(err) {
+			if types.IsBadRequest(err) {
 				content := APIErrorContent(err)
 				registration.LastFailKind = httpResponseToMetricFailureKind(content)
 				registration.LastFailAt = mr.s.now()

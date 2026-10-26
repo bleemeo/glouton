@@ -17,6 +17,7 @@
 package cache
 
 import (
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +61,9 @@ type data struct {
 	Configs                 []bleemeoTypes.Config
 	Services                []bleemeoTypes.Service
 	Monitors                []bleemeoTypes.Monitor
+	// RegistrationStatusSent was added without a cacheVersion bump: an older cache has none (one extra
+	// send), and an older Glouton ignores it, where a bump would discard its whole cache.
+	RegistrationStatusSent bleemeoTypes.RegistrationStatusSent
 }
 
 // SetAccountID update the AccountID.
@@ -68,6 +72,27 @@ func (c *Cache) SetAccountID(accountID string) {
 	defer c.l.Unlock()
 
 	c.data.AccountID = accountID
+	c.dirty = true
+}
+
+// RegistrationStatusSent returns what was last sent of the registration status.
+func (c *Cache) RegistrationStatusSent() bleemeoTypes.RegistrationStatusSent {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := c.data.RegistrationStatusSent
+	result.Services = slices.Clone(result.Services)
+
+	return result
+}
+
+// SetRegistrationStatusSent records what was last sent of the registration status.
+func (c *Cache) SetRegistrationStatusSent(sent bleemeoTypes.RegistrationStatusSent) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	sent.Services = slices.Clone(sent.Services)
+	c.data.RegistrationStatusSent = sent
 	c.dirty = true
 }
 
@@ -337,6 +362,8 @@ func buildGloutonAccountConfig(configs []bleemeoTypes.Config, agentTypes []bleem
 			result.LiveProcessResolution = time.Duration(configInt(cfg.Value)) * time.Second
 		case bleemeoTypes.ConfigTypeCustomMetrics:
 			result.MaxCustomMetrics = configInt(cfg.Value)
+		case bleemeoTypes.ConfigTypeGloutonSendRegistrationStatus:
+			result.SendRegistrationStatus = configBool(cfg.Value)
 		case bleemeoTypes.ConfigTypeSuspended:
 			result.Suspended = configBool(cfg.Value)
 		case bleemeoTypes.ConfigTypeAgentMetricsResolution:

@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -701,6 +702,68 @@ type ScheduleOption struct {
 	// This allow multiple call to ScheduleRun to be "merged" into one.
 	SkipIfRunBefore bool
 }
+
+// ScrapeStatus is how a registration's last run went.
+type ScrapeStatus int
+
+const (
+	// ScrapeNotRun means there was no run yet. It is the zero value.
+	ScrapeNotRun ScrapeStatus = iota
+	// ScrapeSkipped means the last run was skipped because the relabel hook asked to retry
+	// later, as it does for a service's input until the service is registered on Bleemeo.
+	ScrapeSkipped
+	// ScrapeRan means the last run was a real scrape: Error tells how the recent ones went.
+	ScrapeRan
+)
+
+func (s ScrapeStatus) String() string {
+	switch s {
+	case ScrapeNotRun:
+		return "not run"
+	case ScrapeSkipped:
+		return "skipped"
+	case ScrapeRan:
+		return "ran"
+	default:
+		return "ScrapeStatus(" + strconv.Itoa(int(s)) + ")"
+	}
+}
+
+// ScrapeState is a snapshot of a registration's recent scrapes. It has no timestamp: it is
+// reported to Bleemeo, where the value must stay stable.
+type ScrapeState struct {
+	Status ScrapeStatus
+	// Error is the most recent error of the last few scrapes, so that an input failing one
+	// scrape in two reads as failing; empty when none of them failed. The registry also
+	// reports a scrape that did not complete. Only meaningful when Status is ScrapeRan.
+	Error string
+	// ErrorKind tells where Error comes from, read on the error values rather than their text.
+	// ScrapeErrorNone when the provider does not classify its errors: Error tells whether there
+	// is one.
+	ErrorKind ScrapeErrorKind
+	// RegisteredAt is when the input was registered: points received before it came from an
+	// earlier input of the service, such as one on an address that changed. Set when Status is
+	// ScrapeRan.
+	RegisteredAt time.Time
+}
+
+// ScrapeErrorKind tells where a scrape error comes from.
+type ScrapeErrorKind int
+
+const (
+	// ScrapeErrorNone means the error is not classified: there is none, or the provider does not
+	// classify its errors, as jmxtrans and the agent's gatherers.
+	ScrapeErrorNone ScrapeErrorKind = iota
+	// ScrapeErrorUnreachable means the service did not answer: no connection, a connection cut
+	// or timed out, an unknown host, or a scrape that did not complete.
+	ScrapeErrorUnreachable
+	// ScrapeErrorGatherer means the gatherer returned an error with no network error in it, as a
+	// value or as Go's text for one: the service answered.
+	ScrapeErrorGatherer
+	// ScrapeErrorInternal means Glouton alone failed, such as while waiting for its turn to read
+	// secrets, or by canceling the run.
+	ScrapeErrorInternal
+)
 
 type Registration interface {
 	ScheduleRun(opts ScheduleOption)

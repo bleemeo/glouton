@@ -370,17 +370,16 @@ var (
 	}
 )
 
+// isCollected tells whether jmxtrans collects a service: GetJMXMetrics returns metrics for
+// it, at least the generic ones. A service whose metrics are disabled by the configuration
+// (service_ignore_metrics) is not, as for its other collections.
+func isCollected(service discovery.Service) bool {
+	return service.Active && !service.MetricsIgnored && service.Config.JMXPort != 0 && service.IPAddress != ""
+}
+
 // GetJMXMetrics parses the jmx info and returns a list of JmxMetric struct.
 func GetJMXMetrics(service discovery.Service) []config.JmxMetric {
-	if !service.Active {
-		return nil
-	}
-
-	if service.Config.JMXPort == 0 {
-		return nil
-	}
-
-	if service.IPAddress == "" {
+	if !isCollected(service) {
 		return nil
 	}
 

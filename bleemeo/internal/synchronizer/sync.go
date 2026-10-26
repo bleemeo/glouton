@@ -39,6 +39,7 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncconfig"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncregistrationstatus"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -86,6 +87,8 @@ type Synchronizer struct {
 	synchronizers []types.EntitySynchronizer
 	state         *synchronizerState
 	hasFeature    map[types.APIFeature]bool
+	// registrationStatus is also in synchronizers, kept for the diagnostic archive.
+	registrationStatus *syncregistrationstatus.SyncRegistrationStatus
 
 	requestCounter atomic.Uint32
 	// realClient and agentID are only written by the synchronization loop
@@ -114,16 +117,26 @@ type Synchronizer struct {
 
 	lastLogByKey map[string]time.Time
 
-	l                             sync.Mutex
-	disabledUntil                 time.Time
-	disableReason                 bleemeoTypes.DisableReason
-	lastDuplicateCheck            time.Time
-	nextDuplicateCheck            time.Time
-	forceSync                     map[types.EntityName]types.SyncRequest
-	pendingMetricsUpdate          []string
-	pendingMonitorsUpdate         []MonitorUpdate
-	thresholdOverrides            map[thresholdOverrideKey]threshold.Threshold
-	retryableMetricFailure        map[bleemeoTypes.FailureKind]bool
+	l                      sync.Mutex
+	disabledUntil          time.Time
+	disableReason          bleemeoTypes.DisableReason
+	lastDuplicateCheck     time.Time
+	nextDuplicateCheck     time.Time
+	forceSync              map[types.EntityName]types.SyncRequest
+	pendingMetricsUpdate   []string
+	pendingMonitorsUpdate  []MonitorUpdate
+	thresholdOverrides     map[thresholdOverrideKey]threshold.Threshold
+	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
+	// notRegisteredMetrics counts, by name and reason, the metrics the filter dropped.
+	notRegisteredMetrics map[metricStateKey]int
+	// stagedNotRegistered is filterMetrics' count for the run in progress, published by
+	// publishMetricsState.
+	stagedNotRegistered map[metricStateKey]int
+	// registrationMetrics counts the metrics that passed the filter but are not registered:
+	// pending, or refused by the API.
+	registrationMetrics map[metricStateKey]int
+	// metricsStatePublished tells whether a synchronization published the metrics state yet.
+	metricsStatePublished         bool
 	disableCrashReportUploadUntil time.Time
 	lastInfo                      bleemeoTypes.GlobalInfo
 	// Whether the agent MQTT status should be synced. This is used to avoid syncing
@@ -178,6 +191,8 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		state:                  state,
 	}
 
+	s.registrationStatus = syncregistrationstatus.New(s.metricsState, s.now)
+
 	s.synchronizers = []types.EntitySynchronizer{
 		&CompatibilityWrapper{state: state, name: types.EntityInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
@@ -190,6 +205,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		syncservices.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},
+		s.registrationStatus,
 		&CompatibilityWrapper{state: state, name: types.EntityGloutonConfig, method: s.syncGloutonConfig},
 		&CompatibilityWrapper{state: state, name: types.EntityDiagnostics, method: s.syncDiagnostics},
 	}
@@ -221,6 +237,15 @@ func (s *Synchronizer) getClient() types.Client {
 }
 
 func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes.ArchiveWriter) error {
+	// The sync state first: the registration status must not keep it out of the archive.
+	if err := s.diagnosticSyncState(archive); err != nil {
+		return err
+	}
+
+	return s.registrationStatus.DiagnosticArchive(archive, s.option)
+}
+
+func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) error {
 	file, err := archive.Create("bleemeo-sync-state.json")
 	if err != nil {
 		return err
