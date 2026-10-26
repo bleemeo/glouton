@@ -634,6 +634,20 @@ func (c *Cache) AgentTypes() []bleemeoTypes.AgentType {
 	return result
 }
 
+// AgentTypeID returns the ID of the agent type with this name.
+func (c *Cache) AgentTypeID(name bleemeo.AgentType) (id string, found bool) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	for _, a := range c.data.AgentTypes {
+		if a.Name == name {
+			return a.ID, true
+		}
+	}
+
+	return "", false
+}
+
 // SetMetricRegistrationsFail update the Metric list.
 func (c *Cache) SetMetricRegistrationsFail(registrations []bleemeoTypes.MetricRegistration) {
 	c.l.Lock()

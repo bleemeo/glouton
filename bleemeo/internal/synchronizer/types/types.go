@@ -101,7 +101,11 @@ func (t APIFeature) String() string {
 	}
 }
 
-var ErrUnexpectedWorkflow = errors.New("unexpected synchronization workflow")
+var (
+	ErrUnexpectedWorkflow = errors.New("unexpected synchronization workflow")
+	ErrRetryLater         = errors.New("should be retried later")
+	ErrNotExist           = errors.New("does not exist")
+)
 
 // IsBadRequest returns true if the error is an APIError due to 400.
 func IsBadRequest(err error) bool {

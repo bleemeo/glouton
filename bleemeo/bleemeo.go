@@ -707,10 +707,8 @@ func (c *Connector) kubernetesAgentID(clusterName string) (string, error) {
 
 // agentTypeID returns the ID of the given agent type.
 func (c *Connector) agentTypeID(agentType bleemeo.AgentType) (string, error) {
-	for _, t := range c.cache.AgentTypes() {
-		if t.Name == agentType {
-			return t.ID, nil
-		}
+	if id, found := c.cache.AgentTypeID(agentType); found {
+		return id, nil
 	}
 
 	return "", fmt.Errorf("%w: %s", errAgentTypeNotFound, agentType)
@@ -855,15 +853,7 @@ func (c *Connector) DiagnosticArchive(ctx context.Context, archive gloutonTypes.
 func (c *Connector) DiagnosticSNMPAssociation(ctx context.Context, file io.Writer) {
 	fmt.Fprintf(file, "\n# Association with Bleemeo Agent\n")
 
-	var snmpTypeID string
-
-	for _, t := range c.cache.AgentTypes() {
-		if t.Name == bleemeo.AgentType_SNMP {
-			snmpTypeID = t.ID
-
-			break
-		}
-	}
+	snmpTypeID, _ := c.cache.AgentTypeID(bleemeo.AgentType_SNMP)
 
 	for _, t := range c.option.SNMP {
 		agent, err := c.sync.FindSNMPAgent(ctx, t, snmpTypeID, c.cache.AgentsByUUID())

@@ -73,7 +73,10 @@ type syncTestHelper struct {
 	monitorManager    *mockMonitorManager
 
 	// Following fields are options used by some method
-	SNMP               []*snmp.Target
+	SNMP []*snmp.Target
+	// SNMPOnlineTarget returns the number of SNMP targets online. All of them when it's nil.
+	SNMPOnlineTarget   func() int
+	LastVSphereChange  time.Time
 	NotifyLabelsUpdate func()
 	ConfigItems        []config.Item
 	// ReloadState is kept across initSynchronizer, as Glouton keeps it across reloads.
@@ -162,6 +165,11 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 
 	helper.monitorManager = &mockMonitorManager{}
 
+	snmpOnlineTarget := helper.SNMPOnlineTarget
+	if snmpOnlineTarget == nil {
+		snmpOnlineTarget = func() int { return len(helper.SNMP) }
+	}
+
 	s := newForTest(types.Option{
 		Cache:                      helper.cache,
 		IsMqttConnected:            func() bool { return false },
@@ -178,10 +186,10 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 		NotifyFirstRegistration:    func() {},
 		Process:                    mockProcessLister{},
 		SNMP:                       helper.SNMP,
-		SNMPOnlineTarget:           func() int { return len(helper.SNMP) },
+		SNMPOnlineTarget:           snmpOnlineTarget,
 		NotifyHooksUpdate:          helper.NotifyLabelsUpdate,
 		VSphereDevices:             func(context.Context, time.Duration) []bleemeoTypes.VSphereDevice { return helper.devices },
-		LastVSphereChange:          func(_ context.Context) time.Time { return time.Time{} },
+		LastVSphereChange:          func(context.Context) time.Time { return helper.LastVSphereChange },
 		VSphereEndpointsInError:    func() map[string]bool { return map[string]bool{} },
 		IsContainerEnabled:         facts.ContainerFilter{}.ContainerEnabled,
 		IsMetricAllowed:            func(_ map[string]string) bool { return true },

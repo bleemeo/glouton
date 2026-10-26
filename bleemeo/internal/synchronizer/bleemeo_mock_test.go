@@ -60,6 +60,7 @@ func newClientMock(helper *syncTestHelper) *wrapperClientMock {
 					agentTypeSNMP,
 					agentTypeMonitor,
 					agentTypeKubernetes,
+					agentTypeVSphereCluster,
 					agentTypeVSphereHost,
 					agentTypeVSphereVM,
 				},
@@ -71,10 +72,10 @@ func newClientMock(helper *syncTestHelper) *wrapperClientMock {
 	}
 
 	clientMock.resources.agents.createHook = func(agent *bleemeoapi.AgentPayload) error {
-		// TODO: Glouton currently doesn't send the AccountID for SNMP type but does for
-		// the main agent. We should be consistent (and API should NOT trust the value
-		// from Glouton, so likely drop it ?).
-		if agent.AccountID == "" && agent.AgentType == agentTypeSNMP.ID {
+		// TODO: Glouton currently doesn't send the AccountID for abstracted agents (SNMP and
+		// vSphere) but does for the main agent. We should be consistent (and API should NOT trust
+		// the value from Glouton, so likely drop it ?).
+		if agent.AccountID == "" && agent.Abstracted {
 			agent.AccountID = accountID
 		}
 
@@ -621,10 +622,12 @@ func (wcm *wrapperClientMock) UpdateAgentLastDuplicationDate(ctx context.Context
 	panic("implement me")
 }
 
-func (wcm *wrapperClientMock) RegisterVSphereAgent(ctx context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
+func (wcm *wrapperClientMock) RegisterVSphereAgent(_ context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
 	wcm.count(mockAPIResourceAgent, "RegisterVSphereAgent")
 
-	panic("implement me")
+	payload.ID = wcm.resources.agents.incID()
+
+	return payload.Agent, wcm.resources.agents.createResource(&payload, &wcm.errorsCount)
 }
 
 func (wcm *wrapperClientMock) AssertCallsPerResource(t *testing.T, resource string, expected int) {

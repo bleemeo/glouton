@@ -17,12 +17,15 @@
 package synchronizer
 
 import (
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/inputs/vsphere"
+	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	gloutonTypes "github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
@@ -49,6 +52,18 @@ func (rs *reloadStateMock) Token() *oauth2.Token       { return nil }
 func (rs *reloadStateMock) SetToken(*oauth2.Token)     {}
 func (rs *reloadStateMock) Close()                     {}
 
+// vSphereVMMock is a powered on vSphere VM.
+type vSphereVMMock struct{}
+
+func (vSphereVMMock) Kind() string             { return vsphere.KindVM }
+func (vSphereVMMock) FQDN() string             { return "vm.example.com" }
+func (vSphereVMMock) Source() string           { return "vcenter.example.com" }
+func (vSphereVMMock) MOID() string             { return "vm-1" }
+func (vSphereVMMock) Name() string             { return "vm" }
+func (vSphereVMMock) Facts() map[string]string { return map[string]string{"fqdn": "vm.example.com"} }
+func (vSphereVMMock) IsPoweredOn() bool        { return true }
+func (vSphereVMMock) LatestError() error       { return nil }
+
 // TestAPICallsBaseline runs a scripted life of an agent and checks the API calls made, method
 // by method, and the entities synchronized at each step.
 // It guards the migration of the entities to their sub-packages: the calls must not change.
@@ -64,6 +79,16 @@ func TestAPICallsBaseline(t *testing.T) {
 		{Key: "bleemeo.enable", Value: true, Type: config.TypeBool, Source: config.SourceFile, Path: "/etc/glouton/glouton.conf", Priority: 1},
 	}
 	helper.wrapperClientMock.resources.monitors.add(newMonitor)
+	helper.SetAPIConfigs(append(slices.Clone(defaultAccountConfigs), bleemeoTypes.Config{
+		ID: "cfg-vsphere-int", Type: bleemeoTypes.ConfigTypeVSphereIntegration, Account: accountID, Value: true,
+	}))
+
+	// The SNMP target is offline until its step.
+	snmpOnline := 0
+	helper.SNMP = []*snmp.Target{
+		snmp.NewMock(config.SNMPTarget{InitialName: "printer", Target: snmpAddress}, map[string]string{"fqdn": "printer.example.com"}),
+	}
+	helper.SNMPOnlineTarget = func() int { return snmpOnline }
 
 	helper.initSynchronizer(t)
 
@@ -115,6 +140,7 @@ func TestAPICallsBaseline(t *testing.T) {
 				"RegisterFact":               1,
 				"RegisterGloutonConfigItems": 1,
 				"RegisterMetric":             2,
+				"RegisterSNMPAgent":          1,
 				"UpdateAgent":                2,
 			},
 			wantSync: fullSync,
@@ -151,6 +177,40 @@ func TestAPICallsBaseline(t *testing.T) {
 			wantSync:  map[types.EntityName]types.SyncType{types.EntityAgent: types.SyncTypeForceCacheRefresh},
 		},
 		{
+			name: "SNMP target online",
+			prepare: func() {
+				snmpOnline = 1
+			},
+			// The SNMP agent was registered by the first full synchronization, which synchronized
+			// the facts before it: its facts are registered now.
+			wantCalls: map[string]int{"ListFacts": 1, "RegisterFact": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityFact: types.SyncTypeNormal,
+				types.EntitySNMP: types.SyncTypeNormal,
+			},
+		},
+		{
+			name: "vSphere device discovered",
+			prepare: func() {
+				helper.devices = []bleemeoTypes.VSphereDevice{vSphereVMMock{}}
+				helper.LastVSphereChange = helper.Now()
+			},
+			wantCalls: map[string]int{"RegisterVSphereAgent": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityVSphere: types.SyncTypeNormal},
+		},
+		{
+			name: "vSphere device removed",
+			prepare: func() {
+				// The vSphere agents are purged at most every 2 minutes.
+				helper.AddTime(2 * time.Minute)
+
+				helper.devices = nil
+				helper.LastVSphereChange = helper.Now()
+			},
+			wantCalls: map[string]int{"DeleteAgent": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityVSphere: types.SyncTypeNormal},
+		},
+		{
 			name: "full synchronization",
 			prepare: func() {
 				helper.SetTimeToNextFullSync()
@@ -184,11 +244,15 @@ func TestAPICallsBaseline(t *testing.T) {
 				helper.initSynchronizer(t)
 			},
 			// The config items are synchronized again after a reload, without waiting for the next
-			// full synchronization. The new Synchronizer also checks for a duplicated agent.
+			// full synchronization. The new Synchronizer also checks for a duplicated agent, and
+			// sees the SNMP and vSphere changes again.
 			wantCalls: map[string]int{"ListFacts": 1, "ListGloutonConfigItems": 1},
 			wantSync: map[types.EntityName]types.SyncType{
 				types.EntityInfo:          types.SyncTypeNormal,
+				types.EntityFact:          types.SyncTypeNormal,
 				types.EntityContainer:     types.SyncTypeNormal,
+				types.EntitySNMP:          types.SyncTypeNormal,
+				types.EntityVSphere:       types.SyncTypeNormal,
 				types.EntityApplication:   types.SyncTypeNormal,
 				types.EntityService:       types.SyncTypeNormal,
 				types.EntityMetric:        types.SyncTypeNormal,

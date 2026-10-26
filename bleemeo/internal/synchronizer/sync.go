@@ -36,18 +36,23 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncagent"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncconfig"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncdiagnostics"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncgloutonconfig"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncregistrationstatus"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncsnmp"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncvsphere"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/inputs/vsphere"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	"github.com/bleemeo/glouton/threshold"
 	gloutonTypes "github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/version"
@@ -76,7 +81,6 @@ var (
 	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://go.bleemeo.com/l/agent-configuration-bleemeo-account ")
 	errRegistrationFailed         = errors.New("registration failed")
 	errUninitialized              = errors.New("uninitialized")
-	errNotExist                   = errors.New("does not exist")
 	errUploadFailed               = errors.New("upload failed")
 )
 
@@ -88,8 +92,11 @@ type Synchronizer struct {
 	synchronizers []types.EntitySynchronizer
 	state         *synchronizerState
 	hasFeature    map[types.APIFeature]bool
-	// diagnostics is also in synchronizers, kept for ScheduleDiagnosticUpload.
+	// diagnostics, snmp and vsphere are also in synchronizers, kept for the methods forwarded
+	// to them.
 	diagnostics *syncdiagnostics.SyncDiagnostics
+	snmp        *syncsnmp.SyncSNMP
+	vsphere     *syncvsphere.SyncVSphere
 
 	requestCounter atomic.Uint32
 	// realClient and agentID are only written by the synchronization loop
@@ -106,10 +113,8 @@ type Synchronizer struct {
 	heartbeatConsecutiveError int
 	lastSuccessfulSync        time.Time
 	lastSync                  time.Time
-	lastVSphereAgentsPurge    time.Time
 	successiveErrors          int
 	firstErrorAt              time.Time
-	warnAccountMismatchDone   bool
 	maintenanceMode           bool
 	suspendedMode             bool
 	// See the comment on realClient about the locking of agentID.
@@ -192,15 +197,17 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 	}
 
 	s.diagnostics = syncdiagnostics.New(option.State, option.Config.Agent.StateDirectory, s.now)
+	s.snmp = syncsnmp.New(option.State, option.SNMP)
+	s.vsphere = syncvsphere.New(option.State, option.VSphereDevices, s.now)
 
 	s.synchronizers = []types.EntitySynchronizer{
 		&CompatibilityWrapper{state: state, name: types.EntityInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
-		&CompatibilityWrapper{state: state, name: types.EntityAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
+		syncagent.New(),
 		syncconfig.New(option.Cache),
 		&CompatibilityWrapper{state: state, name: types.EntityFact, method: s.syncFacts},
 		&CompatibilityWrapper{state: state, name: types.EntityContainer, method: s.syncContainers},
-		&CompatibilityWrapper{state: state, name: types.EntitySNMP, method: s.syncSNMP},
-		&CompatibilityWrapper{state: state, name: types.EntityVSphere, method: s.syncVSphere},
+		s.snmp,
+		s.vsphere,
 		syncapplications.New(),
 		syncservices.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
@@ -274,7 +281,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		LastFactUpdatedAt          string
 		SuccessiveErrors           int
 		FirstErrorAt               time.Time
-		WarnAccountMismatchDone    bool
 		MaintenanceMode            bool
 		LastMetricCount            int
 		AgentID                    string
@@ -306,7 +312,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		LastMetricActivation:       s.state.lastMetricActivation,
 		SuccessiveErrors:           s.successiveErrors,
 		FirstErrorAt:               s.firstErrorAt,
-		WarnAccountMismatchDone:    s.warnAccountMismatchDone,
 		MaintenanceMode:            s.maintenanceMode,
 		LastMetricCount:            s.state.lastMetricCount,
 		AgentID:                    s.agentID,
@@ -1572,4 +1577,25 @@ func stateGetTime(key string, state bleemeoTypes.State) time.Time {
 	}
 
 	return value
+}
+
+// FindSNMPAgent returns the agent of the SNMP target, among agentsByID. snmpType is the ID of
+// the SNMP agent type.
+func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, snmpType string, agentsByID map[string]bleemeoTypes.Agent) (bleemeoTypes.Agent, error) {
+	return s.snmp.FindAgent(ctx, target, snmpType, agentsByID)
+}
+
+// FindVSphereAgent returns the agent of the vSphere device, among agentsByID. agentTypeID is the
+// ID of the agent type of the device.
+func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device bleemeoTypes.VSphereDevice, agentTypeID string, agentsByID map[string]bleemeoTypes.Agent) (bleemeoTypes.Agent, error) {
+	return s.vsphere.FindAgent(ctx, device, agentTypeID, agentsByID)
+}
+
+// GetVSphereAgentTypes returns a map[vSphereKind]=>AgentTypeID of all vSphere resource kinds.
+func (s *Synchronizer) GetVSphereAgentTypes() (map[vsphere.ResourceKind]string, bool) {
+	return syncvsphere.AgentTypes(s.option.Cache)
+}
+
+func (s *Synchronizer) GetVSphereAgentType(kind vsphere.ResourceKind) (agentTypeID string, found bool) {
+	return syncvsphere.AgentType(s.option.Cache, kind)
 }
