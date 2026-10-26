@@ -501,6 +501,7 @@ type Monitor struct {
 	ForbiddenContent        string
 	CAFile                  string
 	Headers                 map[string]string
+	HeadRequest             bool
 	IsPublicProbe           bool
 }
 

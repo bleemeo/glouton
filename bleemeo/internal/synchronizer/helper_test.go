@@ -71,6 +71,7 @@ type syncTestHelper struct {
 	store             *store.Store
 	httpServer        *httptest.Server
 	devices           []bleemeoTypes.VSphereDevice
+	monitorManager    *mockMonitorManager
 
 	// Following fields are options used by some method
 	SNMP               []*snmp.Target
@@ -157,6 +158,8 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 		docker = &mockDocker{helper: helper}
 	}
 
+	helper.monitorManager = &mockMonitorManager{}
+
 	s := newForTest(types.Option{
 		Cache:                      helper.cache,
 		IsMqttConnected:            func() bool { return false },
@@ -167,7 +170,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 		Docker:                     docker,
 		Discovery:                  helper.discovery,
 		Store:                      helper.store,
-		MonitorManager:             mockMonitorManager{},
+		MonitorManager:             helper.monitorManager,
 		NotifyFirstRegistration:    func() {},
 		Process:                    mockProcessLister{},
 		SNMP:                       helper.SNMP,

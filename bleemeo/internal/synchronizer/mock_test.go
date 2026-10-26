@@ -25,6 +25,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
@@ -61,7 +62,11 @@ type mockDocker struct {
 	helper *syncTestHelper
 }
 
-type mockMonitorManager struct{}
+// mockMonitorManager records the monitors given to UpdateDynamicTargets.
+type mockMonitorManager struct {
+	l        sync.Mutex
+	monitors []gloutonTypes.Monitor
+}
 
 type stateMock struct {
 	data      map[string]any
@@ -149,8 +154,21 @@ func (d mockDocker) ContainerExists(containerID string) bool {
 	return false
 }
 
-func (m mockMonitorManager) UpdateDynamicTargets([]gloutonTypes.Monitor) error {
+func (m *mockMonitorManager) UpdateDynamicTargets(monitors []gloutonTypes.Monitor) error {
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	m.monitors = monitors
+
 	return nil
+}
+
+// Monitors returns the monitors given to the last call of UpdateDynamicTargets.
+func (m *mockMonitorManager) Monitors() []gloutonTypes.Monitor {
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	return m.monitors
 }
 
 // mockProcessLister is a process lister that returns fake processes.

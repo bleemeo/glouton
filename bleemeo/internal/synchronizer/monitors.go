@@ -175,6 +175,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 			ForbiddenContent:        monitor.ForbiddenContent,
 			CAFile:                  monitor.CAFile,
 			Headers:                 monitor.Headers,
+			HeadRequest:             monitor.HeadRequest,
 			IsPublicProbe:           monitor.Account != s.option.Cache.AccountID(),
 		})
 	}

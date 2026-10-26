@@ -179,6 +179,7 @@ type MonitorHTTPOptions struct {
 	ForbiddenContent     string            `json:"monitor_unexpected_content,omitempty"`
 	CAFile               string            `json:"monitor_ca_file,omitempty"`
 	Headers              map[string]string `json:"monitor_headers,omitempty"`
+	HeadRequest          bool              `json:"monitor_head_request,omitempty"`
 }
 
 // Metric is a Metric object on Bleemeo API.

@@ -491,10 +491,18 @@ func (wcm *wrapperClientMock) ListMonitors(context.Context) ([]bleemeoTypes.Moni
 	return wcm.resources.monitors.clone(), nil
 }
 
-func (wcm *wrapperClientMock) GetMonitorByID(ctx context.Context, id string) (bleemeoTypes.Monitor, error) {
+func (wcm *wrapperClientMock) GetMonitorByID(_ context.Context, id string) (bleemeoTypes.Monitor, error) {
 	wcm.requestCounts[mockAPIResourceService]++
 
-	panic("implement me")
+	monitor := wcm.resources.monitors.findResource(func(m bleemeoTypes.Monitor) bool { return m.ID == id })
+	if monitor == nil {
+		return bleemeoTypes.Monitor{}, &bleemeo.APIError{
+			StatusCode: http.StatusNotFound,
+			Err:        fmt.Errorf("%w: service id with %q", bleemeo.ErrResourceNotFound, id),
+		}
+	}
+
+	return *monitor, nil
 }
 
 func (wcm *wrapperClientMock) ListServices(_ context.Context, agentID string, _ string) ([]bleemeoTypes.Service, error) {

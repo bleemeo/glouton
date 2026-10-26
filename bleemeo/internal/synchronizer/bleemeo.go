@@ -42,7 +42,7 @@ const (
 	configFields      = "id,type,account,agent_type,value"
 	configItemFields  = "id,agent,key,value,priority,source,path,type"
 	diagnosticFields  = "name"
-	monitorFields     = "id,account,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file,monitor_headers"
+	monitorFields     = "id,account,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file,monitor_headers,monitor_head_request"
 	serviceFields     = "id,account_config,label,instance,listen_addresses,exe_path,tags,active,created_at"
 
 	// queryTrue is used as a URL query parameter value for boolean true.

@@ -18,6 +18,9 @@ package synchronizer
 
 import (
 	"math/rand"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -238,5 +241,88 @@ func Test_applyJitterToMonitorCreationDateFixedValue(t *testing.T) {
 
 	if !got.Equal(want) {
 		t.Errorf("applyJitterToMonitorCreationDate() = %s, want %s", got, want)
+	}
+}
+
+// TestSyncMonitorHeadRequest ensures monitor_head_request is given to the monitor manager, both on a full
+// synchronization and on a monitor update notification.
+func TestSyncMonitorHeadRequest(t *testing.T) {
+	newTestMonitor := func(id string, headRequest bool) bleemeoTypes.Monitor {
+		return bleemeoTypes.Monitor{
+			ID:           id,
+			Account:      accountID,
+			Active:       true,
+			CreationDate: "2020-01-03T04:05:06Z",
+			URL:          "https://example.com/" + id,
+			HeadRequest:  headRequest,
+		}
+	}
+
+	monitorHeadRequest := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01", true)
+	monitorGet := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02", false)
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	helper.wrapperClientMock.resources.monitors.add(monitorHeadRequest, monitorGet)
+	helper.initSynchronizer(t)
+
+	checkHeadRequest := func(t *testing.T, wantHeadRequest map[string]bool) {
+		t.Helper()
+
+		gotMonitors := helper.monitorManager.Monitors()
+		if len(gotMonitors) != len(wantHeadRequest) {
+			t.Fatalf("got %d monitors, want %d: %+v", len(gotMonitors), len(wantHeadRequest), gotMonitors)
+		}
+
+		for _, monitor := range gotMonitors {
+			want, ok := wantHeadRequest[monitor.ID]
+			if !ok {
+				t.Errorf("unexpected monitor %s", monitor.ID)
+
+				continue
+			}
+
+			if monitor.HeadRequest != want {
+				t.Errorf("monitor %s: HeadRequest = %v, want %v", monitor.URL, monitor.HeadRequest, want)
+			}
+		}
+	}
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ID: true, monitorGet.ID: false})
+
+	// Swap head_request on the API, and notify only the change of the second monitor.
+	for i, m := range helper.wrapperClientMock.resources.monitors.elems {
+		helper.wrapperClientMock.resources.monitors.elems[i].HeadRequest = !m.HeadRequest
+	}
+
+	helper.s.UpdateMonitor("change", monitorGet.ID)
+	helper.AddTime(time.Minute)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	// The first monitor wasn't notified, so it keeps the value from the previous synchronization.
+	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ID: true, monitorGet.ID: true})
+}
+
+// TestMonitorFieldsMatchTypes ensures the HTTP options of the monitors are requested.
+// The API mock doesn't use the fields, so a missing field would only be noticed on a real API.
+func TestMonitorFieldsMatchTypes(t *testing.T) {
+	t.Parallel()
+
+	fields := strings.Split(monitorFields, ",")
+
+	for field := range reflect.TypeFor[bleemeoTypes.MonitorHTTPOptions]().Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if !slices.Contains(fields, name) {
+			t.Errorf("fields %q don't contain %q (field %s)", monitorFields, name, field.Name)
+		}
 	}
 }
