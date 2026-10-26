@@ -36,7 +36,7 @@ type notificationPayloadV1 struct {
 type notificationPayload struct {
 	MessageType                  string                        `json:"message_type"`
 	MetricUUID                   string                        `json:"metric_uuid,omitempty"`
-	MonitorUUID                  string                        `json:"monitor_uuid,omitempty"`
+	MonitorID                    string                        `json:"monitor_id,omitempty"`
 	MonitorOperationType         string                        `json:"monitor_operation_type,omitempty"`
 	DiagnosticRequestToken       string                        `json:"request_token,omitempty"`
 	AckTimestamp                 string                        `json:"ack_timestamp,omitempty"`

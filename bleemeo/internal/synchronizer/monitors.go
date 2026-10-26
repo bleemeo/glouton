@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
@@ -35,6 +36,9 @@ var (
 	errMissingAccountConf = errors.New("missing account configuration")
 	errCannotParse        = errors.New("couldn't parse monitor")
 )
+
+// monitorsSyncRetryDelay is the delay before retrying a monitor synchronization which failed.
+const monitorsSyncRetryDelay = time.Minute
 
 type monitorOperation int
 
@@ -87,14 +91,14 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 
 	if syncType == types.SyncTypeForceCacheRefresh {
 		monitors, err = apiClient.ListMonitors(ctx)
-		if err != nil {
-			return false, err
-		}
 	} else {
 		monitors, err = s.getListOfMonitorsFromAPI(ctx, execution, pendingMonitorsUpdate)
-		if err != nil {
-			return false, err
-		}
+	}
+
+	if err != nil {
+		s.retryMonitorsSync(syncType, pendingMonitorsUpdate)
+
+		return false, err
 	}
 
 	s.option.Cache.SetMonitors(monitors)
@@ -115,6 +119,17 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	}
 
 	return false, s.ApplyMonitorUpdate()
+}
+
+// retryMonitorsSync puts back the monitor updates which couldn't be applied, before the ones
+// received meanwhile, and retries the synchronization later. Failed synchronizations aren't
+// retried otherwise: the updates would be lost until the next full synchronization, hours later.
+func (s *Synchronizer) retryMonitorsSync(syncType types.SyncType, updates []MonitorUpdate) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.pendingMonitorsUpdate = append(slices.Clone(updates), s.pendingMonitorsUpdate...)
+	s.requestLaterSynchronizationLocked(types.EntityMonitor, syncType == types.SyncTypeForceCacheRefresh, monitorsSyncRetryDelay)
 }
 
 func hashAgentID(agentID string) uint64 {
@@ -214,6 +229,14 @@ OuterBreak:
 			}
 
 			return nil, err
+		}
+
+		// The API notifies a deactivation as a change, and returns inactive monitors by ID:
+		// stop probing it like a full synchronization would (it only lists active monitors).
+		if !result.Active {
+			currentMonitors = deleteMonitorByUUID(currentMonitors, m.uuid)
+
+			continue
 		}
 
 		if m.op == Change {

@@ -132,16 +132,13 @@ var (
 		InitialPassword: passwordAlreadySet,
 	}
 
-	newMonitor = bleemeoapi.ServicePayload{
-		Service: bleemeoTypes.Service{
-			ID:           "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
-			Active:       true,
-			Account:      accountID,
-			CreationDate: "2020-01-03T04:05:06Z",
-		},
-		URL:       activeMonitorURL,
-		AgentID:   newMonitorAgent.ID,
-		IsMonitor: true,
+	newMonitor = bleemeoTypes.Monitor{
+		ID:           "3b2e1f3a-8c0d-4f6e-9a57-1d2c3b4a5e6f",
+		Account:      accountID,
+		CreationDate: "2020-01-03T04:05:06Z",
+		URL:          activeMonitorURL,
+		AgentID:      newMonitorAgent.ID,
+		Active:       true,
 	}
 
 	testAgentMetric1 = bleemeoapi.MetricPayload{
@@ -166,7 +163,6 @@ var (
 			"__name__=\"probe_whatever\",instance=\"http://bleemeo.com\",scraper_uuid=\"%s\"",
 			testAgent.ID,
 		),
-		ServiceID:   newMonitor.ID,
 		FirstSeenAt: time.Unix(0, 0),
 		Name:        "probe_whatever",
 	}

@@ -21,10 +21,9 @@ import (
 )
 
 type ServicePayload struct {
-	bleemeoTypes.Monitor
+	bleemeoTypes.Service
 
-	Account   string `json:"account"`
-	IsMonitor bool   `json:"monitor"`
+	AgentID string `json:"agent"`
 }
 
 type ContainerPayload struct {

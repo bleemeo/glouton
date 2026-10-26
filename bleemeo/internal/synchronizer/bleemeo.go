@@ -42,11 +42,14 @@ const (
 	configFields      = "id,type,account,agent_type,value"
 	configItemFields  = "id,agent,key,value,priority,source,path,type"
 	diagnosticFields  = "name"
-	monitorFields     = "id,account,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file,monitor_headers,monitor_head_request"
+	monitorFields     = "id,account,agent,created_at,active,url,expected_content,expected_response_code,unexpected_content,ca_file,headers,head_request"
 	serviceFields     = "id,account_config,label,instance,listen_addresses,exe_path,tags,active,created_at"
 
 	// queryTrue is used as a URL query parameter value for boolean true.
 	queryTrue = "true"
+
+	// resourceMonitor isn't yet defined by bleemeo-go.
+	resourceMonitor bleemeo.Resource = "v1/monitor/"
 
 	// paramFields is the URL query parameter name for specifying API response fields.
 	paramFields = "fields"
@@ -518,14 +521,13 @@ func (cl *wrapperClient) SetMetricActive(ctx context.Context, id string, active 
 
 func (cl *wrapperClient) ListMonitors(ctx context.Context) ([]bleemeoTypes.Monitor, error) {
 	params := url.Values{
-		"monitor":   {queryTrue},
 		paramActive: {queryTrue},
 		paramFields: {monitorFields},
 	}
 
 	var monitors []bleemeoTypes.Monitor
 
-	iter := cl.Iterator(ctx, bleemeo.ResourceService, params)
+	iter := cl.Iterator(ctx, resourceMonitor, params)
 	for iter.Next(ctx) {
 		var monitor bleemeoTypes.Monitor
 
@@ -542,7 +544,7 @@ func (cl *wrapperClient) ListMonitors(ctx context.Context) ([]bleemeoTypes.Monit
 func (cl *wrapperClient) GetMonitorByID(ctx context.Context, id string) (bleemeoTypes.Monitor, error) {
 	var result bleemeoTypes.Monitor
 
-	err := cl.Get(ctx, bleemeo.ResourceService, id, monitorFields, &result)
+	err := cl.Get(ctx, resourceMonitor, id, monitorFields, &result)
 
 	return result, err
 }

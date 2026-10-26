@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -78,5 +79,67 @@ func TestNotificationCompatibility(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// payloadMessage is a paho.Message which only has a payload.
+type payloadMessage struct {
+	paho.Message
+
+	payload []byte
+}
+
+func (m payloadMessage) Payload() []byte {
+	return m.payload
+}
+
+// TestMonitorUpdateNotification ensures a monitor-update notification requests the update
+// of the monitor identified by its Monitor ID (monitor_id), not by its Service ID (monitor_uuid).
+func TestMonitorUpdateNotification(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		payload string
+		wantOp  string
+		wantID  string
+	}{
+		{
+			name: "monitor_id",
+			payload: `{"message_type": "monitor-update", "monitor_operation_type": "change",` +
+				` "monitor_uuid": "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70", "monitor_id": "3b2e1f3a-8c0d-4f6e-9a57-1d2c3b4a5e6f"}`,
+			wantOp: "change",
+			wantID: "3b2e1f3a-8c0d-4f6e-9a57-1d2c3b4a5e6f",
+		},
+		{
+			name: "delete",
+			payload: `{"message_type": "monitor-update", "monitor_operation_type": "delete",` +
+				` "monitor_uuid": "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70", "monitor_id": "3b2e1f3a-8c0d-4f6e-9a57-1d2c3b4a5e6f"}`,
+			wantOp: "delete",
+			wantID: "3b2e1f3a-8c0d-4f6e-9a57-1d2c3b4a5e6f",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls [][2]string
+
+			c := &Client{
+				opts: Option{
+					UpdateMonitor: func(op string, uuid string) {
+						calls = append(calls, [2]string{op, uuid})
+					},
+				},
+			}
+
+			c.onNotification(t.Context(), payloadMessage{payload: []byte(tt.payload)})
+
+			want := [][2]string{{tt.wantOp, tt.wantID}}
+			if diff := cmp.Diff(want, calls); diff != "" {
+				t.Errorf("UpdateMonitor calls mismatch (-want +got)\n%s", diff)
+			}
+		})
 	}
 }

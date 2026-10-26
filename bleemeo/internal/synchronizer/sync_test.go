@@ -110,7 +110,7 @@ func TestSync(t *testing.T) {
 
 	helper.preregisterAgent(t)
 	helper.wrapperClientMock.resources.metrics.add(testAgentMetric1, testAgentMetric2, testMonitorMetricPrivateProbe)
-	helper.wrapperClientMock.resources.monitors.add(newMonitor.Monitor)
+	helper.wrapperClientMock.resources.monitors.add(newMonitor)
 
 	helper.wrapperClientMock.resources.agents.createHook = func(*bleemeoapi.AgentPayload) error {
 		return fmt.Errorf("%w: agent is already registered, shouldn't re-register", errUnexpectedOperation)
@@ -152,7 +152,7 @@ func TestSync(t *testing.T) {
 	// Did we sync and enable the monitor present in the configuration ?
 	syncedMonitors := helper.s.option.Cache.Monitors()
 	wantMonitor := []bleemeoTypes.Monitor{
-		newMonitor.Monitor,
+		newMonitor,
 	}
 
 	if diff := cmp.Diff(wantMonitor, syncedMonitors); diff != "" {
@@ -1053,7 +1053,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			})
 
 			optSort := cmpopts.SortSlices(func(x bleemeoapi.ServicePayload, y bleemeoapi.ServicePayload) bool { return x.ID < y.ID })
-			if diff := cmp.Diff([]bleemeoTypes.Monitor{monitor.Monitor}, helper.wrapperClientMock.resources.monitors.clone(), optSort); diff != "" {
+			if diff := cmp.Diff([]bleemeoTypes.Monitor{monitor}, helper.wrapperClientMock.resources.monitors.clone(), optSort); diff != "" {
 				t.Errorf("monitors mismatch (-want +got)\n%s", diff)
 			}
 
@@ -1077,8 +1077,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 						newMonitor.AgentID,
 						idAgentMain,
 					),
-					ServiceID: newMonitor.ID,
-					Name:      testMetricProbeSuccess,
+					Name: testMetricProbeSuccess,
 				},
 			}
 

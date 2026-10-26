@@ -163,23 +163,26 @@ type Threshold struct {
 	HighCritical *float64 `json:"threshold_high_critical"`
 }
 
-// Monitor groups all the information required to write metrics to a monitor.
+// Monitor is a Monitor object on Bleemeo API.
 type Monitor struct {
-	Service
 	MonitorHTTPOptions
 
-	URL     string `json:"monitor_url"`
-	AgentID string `json:"agent"`
+	ID           string `json:"id"`
+	Account      string `json:"account"`
+	AgentID      string `json:"agent"`
+	URL          string `json:"url"`
+	CreationDate string `json:"created_at"`
+	Active       bool   `json:"active"`
 }
 
 // MonitorHTTPOptions groups all the possible options when the probe is targeting an HTTP or HTTPS service.
 type MonitorHTTPOptions struct {
-	ExpectedContent      string            `json:"monitor_expected_content,omitempty"`
-	ExpectedResponseCode int               `json:"monitor_expected_response_code,omitempty"`
-	ForbiddenContent     string            `json:"monitor_unexpected_content,omitempty"`
-	CAFile               string            `json:"monitor_ca_file,omitempty"`
-	Headers              map[string]string `json:"monitor_headers,omitempty"`
-	HeadRequest          bool              `json:"monitor_head_request,omitempty"`
+	ExpectedContent      string            `json:"expected_content,omitempty"`
+	ExpectedResponseCode int               `json:"expected_response_code,omitempty"`
+	ForbiddenContent     string            `json:"unexpected_content,omitempty"`
+	CAFile               string            `json:"ca_file,omitempty"`
+	Headers              map[string]string `json:"headers,omitempty"`
+	HeadRequest          bool              `json:"head_request,omitempty"`
 }
 
 // Metric is a Metric object on Bleemeo API.

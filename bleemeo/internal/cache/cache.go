@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	cacheVersion = 8
+	cacheVersion = 9
 	cacheKey     = "CacheBleemeoConnector"
 )
 
@@ -735,6 +735,7 @@ func Load(state bleemeoTypes.State) *Cache {
 		5: upgradeV5,
 		6: upgradeV6,
 		7: upgradeV7,
+		8: upgradeV8,
 	}
 
 	upgradeCount := 0
@@ -857,6 +858,15 @@ func upgradeV7(_ bleemeoTypes.State, newData data) data {
 	// Drop old data; it will be re-fetched from the API.
 	newData.Configs = nil
 	newData.Version = 8
+
+	return newData
+}
+
+func upgradeV8(_ bleemeoTypes.State, newData data) data {
+	// Version 9 reads monitors from /v1/monitor/ instead of /v1/service/: their ID and fields changed.
+	// Drop old monitors; they will be re-fetched from the API.
+	newData.Monitors = nil
+	newData.Version = 9
 
 	return newData
 }

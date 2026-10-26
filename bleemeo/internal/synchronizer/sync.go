@@ -756,7 +756,7 @@ func (s *Synchronizer) SetSuspended(suspended bool) {
 	s.suspendedMode = suspended
 }
 
-// UpdateMonitor requests to update a monitor, identified by its UUID. It allows for adding, updating and removing a monitor.
+// UpdateMonitor requests to update a monitor, identified by its Monitor ID. It allows for adding, updating and removing a monitor.
 func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 	s.l.Lock()
 	defer s.l.Unlock()

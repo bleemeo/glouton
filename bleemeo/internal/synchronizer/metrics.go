@@ -1259,8 +1259,8 @@ func (s *Synchronizer) prepareMetricPayloadOtherAgent(payload *bleemeoapi.Metric
 
 	for _, monitor := range monitors {
 		if monitor.AgentID == agentID {
+			// A monitor has no Service: its metrics are only attached to its agent.
 			payload.AgentID = monitor.AgentID
-			payload.ServiceID = monitor.ID
 
 			return nil
 		}

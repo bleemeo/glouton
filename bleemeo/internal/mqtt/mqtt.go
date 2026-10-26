@@ -92,7 +92,7 @@ type Option struct {
 	UpdateConfigCallback func(now bool)
 	// UpdateMetrics request update for given metric UUIDs
 	UpdateMetrics func(metricUUID ...string)
-	// UpdateMonitor requests a sync of a monitor
+	// UpdateMonitor requests a sync of a monitor, identified by its Monitor ID.
 	UpdateMonitor func(op string, uuid string)
 	// UpdateMaintenance requests to check for the maintenance mode again, within delay.
 	// A delay of zero requests the check as soon as possible.
@@ -1028,7 +1028,7 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 	case "threshold-update":
 		c.opts.UpdateMetrics(payload.MetricUUID)
 	case "monitor-update":
-		c.opts.UpdateMonitor(payload.MonitorOperationType, payload.MonitorUUID)
+		c.opts.UpdateMonitor(payload.MonitorOperationType, payload.MonitorID)
 	case "diagnostic-request":
 		go func() {
 			defer crashreport.ProcessPanic()

@@ -14,7 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//nolint:dupl
 package synchronizer
 
 import (
@@ -134,13 +133,13 @@ func (helper *syncTestHelper) preregisterAgent(t *testing.T) {
 }
 
 // addMonitorOnAPI pre-create a monitor in the API.
-func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) bleemeoapi.ServicePayload {
+func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) bleemeoTypes.Monitor {
 	t.Helper()
 
 	newMonitorCopy := newMonitor
 	newMonitorCopy.Account = accountID
 
-	helper.wrapperClientMock.resources.monitors.add(newMonitorCopy.Monitor)
+	helper.wrapperClientMock.resources.monitors.add(newMonitorCopy)
 
 	return newMonitorCopy
 }
@@ -434,7 +433,7 @@ func (helper *syncTestHelper) assertAgentsInAPI(t *testing.T, want []bleemeoapi.
 
 // assertServicesInAPI check that wanted agents (and only wanted agents) are present in API.
 // This is mostly a wrapper around cmp.Diff which also do:
-// * replace idAny by corresponding ID (match service by same name, instance, url)
+// * replace idAny by corresponding ID (match service by same name, instance)
 // * sort list by ID.
 func (helper *syncTestHelper) assertServicesInAPI(t *testing.T, want []bleemeoapi.ServicePayload) {
 	t.Helper()
@@ -448,7 +447,7 @@ func (helper *syncTestHelper) assertServicesInAPI(t *testing.T, want []bleemeoap
 			x.ID = idObjectNotFound
 
 			for _, existing := range services {
-				if x.Label == existing.Label && x.Instance == existing.Instance && x.URL == existing.URL {
+				if x.Label == existing.Label && x.Instance == existing.Instance {
 					x.ID = existing.ID
 
 					break

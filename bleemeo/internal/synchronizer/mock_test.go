@@ -45,6 +45,7 @@ const (
 	mockAPIResourceConfig      = "config"
 	mockAPIResourceApplication = "application"
 	mockAPIResourceService     = "service"
+	mockAPIResourceMonitor     = "monitor"
 	mockAPIGloutonConfigItem   = "gloutonconfigitem"
 	mockAPIGloutonDiagnostic   = "gloutondiagnostic"
 )
