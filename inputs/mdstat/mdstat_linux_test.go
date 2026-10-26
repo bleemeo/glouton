@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -487,6 +488,63 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				t.Fatalf("Unexpected metrics (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+// TestCallMdadm runs callMdadm against a fake mdadm binary,
+// to make sure both the output and the error message of the command are read.
+func TestCallMdadm(t *testing.T) {
+	previousRunnerOpt := runnerOpt
+	runnerOpt = gloutonexec.Option{} // run the fake mdadm directly, without sudo nor chroot
+
+	t.Cleanup(func() { runnerOpt = previousRunnerOpt })
+
+	mdadmDetailsFile, err := os.Open(filepath.Join("testdata", "mdadm", "multiple_delayed.yml"))
+	if err != nil {
+		t.Fatal("Failed to open mdadm details:", err)
+	}
+
+	defer mdadmDetailsFile.Close()
+
+	var mdadmDetails map[string]string
+
+	err = yaml.NewDecoder(mdadmDetailsFile).Decode(&mdadmDetails)
+	if err != nil {
+		t.Fatal("Failed to parse mdadm details:", err)
+	}
+
+	tempDir := t.TempDir()
+	detailsPath := filepath.Join(tempDir, "details")
+
+	err = os.WriteFile(detailsPath, []byte(mdadmDetails[arrayMD1]), 0o600)
+	if err != nil {
+		t.Fatal("Failed to write mdadm details:", err)
+	}
+
+	// The fake mdadm knows only md1, like the real one would fail on an array that doesn't exist.
+	mdadmPath := filepath.Join(tempDir, "mdadm")
+	script := fmt.Sprintf(
+		"#!/bin/sh\nif [ \"$2\" = /dev/%s ]; then cat %s; exit 0; fi\necho \"mdadm: cannot open $2: No such file or directory\" >&2\nexit 1\n",
+		arrayMD1, detailsPath,
+	)
+
+	err = os.WriteFile(mdadmPath, []byte(script), 0o700) //nolint:gosec // the fake mdadm must be executable
+	if err != nil {
+		t.Fatal("Failed to write fake mdadm:", err)
+	}
+
+	info, err := callMdadm(arrayMD1, mdadmPath, gloutonexec.New("/"))
+	if err != nil {
+		t.Fatalf("Unexpected error from callMdadm(%s): %v", arrayMD1, err)
+	}
+
+	if want := "clean, resyncing (DELAYED)"; info.state != want {
+		t.Fatalf("Unexpected state for %s: want %q, got %q", arrayMD1, want, info.state)
+	}
+
+	_, err = callMdadm("md9", mdadmPath, gloutonexec.New("/"))
+	if want := "(stderr: mdadm: cannot open /dev/md9: No such file or directory)"; err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("Unexpected error from callMdadm(md9): want it to contain %q, got %v", want, err)
 	}
 }
 
