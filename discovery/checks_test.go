@@ -18,7 +18,10 @@ package discovery
 
 import (
 	"net"
+	"sync"
 	"testing"
+
+	"github.com/bleemeo/glouton/facts"
 )
 
 // TestNTPServiceDiscoveryInfo checks the assumptions the NTP check dispatch is built on:
@@ -51,4 +54,69 @@ func TestNTPServiceDiscoveryInfo(t *testing.T) {
 	if _, _, err := net.SplitHostPort(addr); err != nil {
 		t.Errorf("chronyCmdAddress() isn't a host:port: %v", err)
 	}
+}
+
+// TestGetCheckNowDuringReconfigure is a regression test for a data race between NRPE and
+// the discovery: NRPE looks up custom checks with GetCheckNow from its connection goroutines
+// while the discovery adds and removes checks. Run it with -race.
+func TestGetCheckNowDuringReconfigure(t *testing.T) {
+	const reconfigureCount = 100
+
+	key := NameInstance{Name: string(RedisService), Instance: ""}
+	services := map[NameInstance]Service{
+		key: { //nolint:exhaustruct
+			Name:            string(RedisService),
+			ServiceType:     RedisService,
+			IPAddress:       "127.0.0.1",
+			Active:          true,
+			ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: "127.0.0.1", Port: 6379}},
+		},
+	}
+
+	expectedAdded := make([]string, 0, reconfigureCount/2)
+	for range reconfigureCount / 2 {
+		expectedAdded = append(expectedAdded, "check for "+string(RedisService))
+	}
+
+	d := &Discovery{ //nolint:exhaustruct
+		metricRegistry: &mockRegistry{ //nolint:exhaustruct
+			ExpectedAddedContains: expectedAdded,
+		},
+		activeCheck: make(map[NameInstance]CheckDetails),
+	}
+
+	var (
+		wg   sync.WaitGroup
+		done = make(chan struct{})
+	)
+
+	wg.Go(func() {
+		defer close(done)
+
+		// The service appears and disappears, like a container being started and stopped.
+		for i := range reconfigureCount {
+			oldServices, newServices := map[NameInstance]Service{}, services
+			if i%2 == 1 {
+				oldServices, newServices = services, map[NameInstance]Service{}
+			}
+
+			// The discovery reconfigures the checks while holding its lock.
+			d.l.Lock()
+			d.configureChecks(oldServices, newServices)
+			d.l.Unlock()
+		}
+	})
+
+	wg.Go(func() {
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				_, _ = d.GetCheckNow(key)
+			}
+		}
+	})
+
+	wg.Wait()
 }
