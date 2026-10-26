@@ -19,6 +19,7 @@ package discovery
 
 import (
 	"context"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -64,7 +65,10 @@ type Option struct {
 	IsContainerIgnored func(facts.Container) bool
 	IsServiceIgnored   func(Service) bool
 	FileReader         fileReader
-	DefaultStack       string
+	// HostFS is the host's filesystem, used to guess the executable of a process whose
+	// /proc/PID/exe couldn't be read (see guessExecutable). Nil disables the guess.
+	HostFS       fs.FS
+	DefaultStack string
 	// AllowedLabelOverrides is the list of service-configuration fields (by
 	// their YAML name) that may be overridden through "glouton.*" container
 	// labels and Kubernetes annotations. See config.Container.AllowedLabelOverrides.
@@ -444,6 +448,11 @@ func (dd *DynamicDiscovery) serviceFromProcess(ctx context.Context, process fact
 		ExePath:        process.Executable,
 		Active:         true,
 		LastTimeSeen:   dd.now(),
+	}
+
+	// A containerised process's command line names a path of its container, not of the host.
+	if service.ExePath == "" && service.ContainerID == "" {
+		service.ExePath = guessExecutable(dd.option.HostFS, process.CmdLineList)
 	}
 
 	if service.ContainerID != "" {
@@ -934,7 +943,7 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 	// For now, special case for java, erlang or python process.
 	// Need a more general way to manage those case. Every interpreter/VM
 	// language are affected.
-	if name == interpreterJava || strings.HasPrefix(name, interpreterPython) || name == processErl || strings.HasPrefix(name, "beam") {
+	if isInterpreter(name) {
 		for _, candidate := range knownInterpretedProcess {
 			switch candidate.Interpreter {
 			case interpreterErlang:
@@ -969,6 +978,12 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 	}
 
 	return "", false
+}
+
+// isInterpreter tells whether the process named name is an interpreter or a VM, which runs
+// the service rather than being it.
+func isInterpreter(name string) bool {
+	return name == interpreterJava || strings.HasPrefix(name, interpreterPython) || name == processErl || strings.HasPrefix(name, "beam")
 }
 
 // excludeEmptyAddress exclude entry with empty Address IP. It will modify input.

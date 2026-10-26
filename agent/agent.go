@@ -971,6 +971,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		IsContainerIgnored:    a.containerFilter.ContainerIgnored,
 		IsServiceIgnored:      serviceIgnored.IsServiceIgnored,
 		FileReader:            discovery.SudoFileReader{HostRootPath: a.hostRootPath, Runner: a.commandRunner},
+		HostFS:                os.DirFS(a.hostRootPath),
 		AllowedLabelOverrides: a.config.Container.EffectiveAllowedLabelOverrides(),
 	})
 
