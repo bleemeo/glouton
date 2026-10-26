@@ -65,8 +65,26 @@ type Processes struct {
 
 	l         sync.Mutex
 	source    *proc.FS
-	exeCache  map[proc.ID]string
+	exeCache  map[proc.ID]cachedExecutable
 	userCache map[proc.ID]string
+}
+
+// cachedExecutable is the executable of a process, with the comm it had when it was read.
+type cachedExecutable struct {
+	comm string
+	path string
+}
+
+// processExecutable returns the executable of a process, read again only when the process
+// ran another program since it was cached: an exec keeps the PID and start time the cache
+// is keyed on, but resets the comm. A script ending with "exec uwsgi" would otherwise keep
+// the shell as its executable.
+func processExecutable(cached cachedExecutable, found bool, comm string, readExecutable func() string) cachedExecutable {
+	if found && cached.comm == comm {
+		return cached
+	}
+
+	return cachedExecutable{comm: comm, path: readExecutable()}
 }
 
 func expectedError(expected string) error {
@@ -140,7 +158,7 @@ func (c *Processes) Processes(ctx context.Context) (processes []facts.Process, f
 		return nil, factory, err
 	}
 
-	newExeCache := make(map[proc.ID]string, len(exeCache))
+	newExeCache := make(map[proc.ID]cachedExecutable, len(exeCache))
 	newUserCache := make(map[proc.ID]string, len(userCache))
 	pwdLookup := c.getPwdlookup()
 
@@ -161,13 +179,17 @@ func (c *Processes) Processes(ctx context.Context) (processes []facts.Process, f
 
 		status := facts.PsStat2Status(p.procStat.State)
 
-		executable, ok := exeCache[p.ID]
-		if !ok {
+		cached, found := exeCache[p.ID]
+		executable := processExecutable(cached, found, p.procStat.Comm, func() string {
 			psProc, err := process.NewProcess(int32(p.ID.Pid)) //nolint:gosec // PID fits in int32
-			if err == nil {
-				executable, _ = psProc.ExeWithContext(ctx)
+			if err != nil {
+				return ""
 			}
-		}
+
+			exe, _ := psProc.ExeWithContext(ctx)
+
+			return exe
+		})
 
 		newExeCache[p.ID] = executable
 
@@ -206,7 +228,7 @@ func (c *Processes) Processes(ctx context.Context) (processes []facts.Process, f
 			CPUTime:         float64(p.procStat.UTime+p.procStat.STime) / userHZ,
 			Status:          status,
 			Username:        username,
-			Executable:      executable,
+			Executable:      executable.path,
 			NumThreads:      p.procStat.NumThreads,
 		})
 	}
