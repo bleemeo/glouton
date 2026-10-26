@@ -273,7 +273,7 @@ func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, execution t
 		_, err := apiClient.UpdateContainer(ctx, container.ID, body)
 		if err != nil {
 			// If the container wasn't found, it has already been deleted.
-			if IsNotFound(err) {
+			if types.IsNotFound(err) {
 				delete(registeredContainers, container.ID)
 
 				deletedIDs = append(deletedIDs, container.ID)

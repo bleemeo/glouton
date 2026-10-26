@@ -34,6 +34,7 @@ import (
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/prometheus/model"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 )
 
 type EntityName string
@@ -111,6 +112,15 @@ func IsBadRequest(err error) bool {
 	return false
 }
 
+// IsNotFound returns true if the error is an APIError due to 404.
+func IsNotFound(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode == http.StatusNotFound
+	}
+
+	return false
+}
+
 // IsRefusedValue tells whether the API, or a proxy in front of it, refused the value sent itself:
 // invalid (400, 422) or too large (413). Other errors, such as an authentication error or
 // throttling, are the synchronizer's to handle.
@@ -133,6 +143,12 @@ type EntitySynchronizer interface {
 	EnabledInSuspendedMode() bool
 
 	PrepareExecution(ctx context.Context, execution SynchronizationExecution) (EntitySynchronizerExecution, error)
+}
+
+// DiagnosticArchiver is implemented by the entity synchronizers that add their state to the
+// diagnostic archive. It may be called from another goroutine than the synchronization.
+type DiagnosticArchiver interface {
+	DiagnosticArchive(ctx context.Context, archive gloutonTypes.ArchiveWriter) error
 }
 
 type EntitySynchronizerExecution interface {

@@ -30,6 +30,7 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 )
@@ -593,7 +594,7 @@ func (cl *wrapperClient) RegisterService(ctx context.Context, payload bleemeoapi
 
 func (cl *wrapperClient) DeleteService(ctx context.Context, id string) error {
 	err := cl.Delete(ctx, bleemeo.ResourceService, id)
-	if err != nil && IsNotFound(err) {
+	if err != nil && types.IsNotFound(err) {
 		return nil
 	}
 

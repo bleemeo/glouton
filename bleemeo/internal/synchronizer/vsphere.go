@@ -313,7 +313,7 @@ func (s *Synchronizer) purgeVSphereAgents(ctx context.Context, apiClient types.V
 		agentsToRemoveFromCache[id] = true
 
 		err = apiClient.DeleteAgent(ctx, id)
-		if err != nil && !IsNotFound(err) {
+		if err != nil && !types.IsNotFound(err) {
 			return err
 		}
 	}

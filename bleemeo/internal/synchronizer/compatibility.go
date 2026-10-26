@@ -36,16 +36,11 @@ type synchronizerState struct {
 	lastMetricCount      int
 	lastMetricActivation time.Time
 
-	onDemandDiagnostic synchronizerOnDemandDiagnostic
-
 	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
 	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive
 	// notifications to tell us the backend is out of maintenance. So we resort to HTTP polling every 15
 	// minutes to check whether we are still in maintenance of not.
 	lastMaintenanceSync time.Time
-
-	// configSyncDone is true when the config items were successfully synced.
-	configSyncDone bool
 }
 
 type CompatibilityWrapper struct {
@@ -154,12 +149,6 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 		execution.RequestSynchronization(types.EntityVSphere, false)
 
 		state.lastVSphereUpdate = lastVSphereChange
-	}
-
-	// After a reload, the config has been changed, so we want to do a fullsync
-	// without waiting the nextFullSync that is kept between reload.
-	if !state.configSyncDone {
-		execution.RequestSynchronization(types.EntityGloutonConfig, true)
 	}
 
 	_, minDelayed := execution.GlobalState().DelayedContainers()

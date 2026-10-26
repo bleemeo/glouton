@@ -41,6 +41,8 @@ const collectionWait = 5 * time.Minute
 
 // SyncRegistrationStatus sends the registration status to the Agent's registration_status field.
 type SyncRegistrationStatus struct {
+	// option is read by DiagnosticArchive, which runs outside of the executions.
+	option       types.Option
 	metricsState func() ([]bleemeoTypes.MetricState, bool)
 	// now is the clock a send is recorded with.
 	now func() time.Time
@@ -57,8 +59,8 @@ type SyncRegistrationStatus struct {
 
 // New returns the entity, which reads the not-registered metrics from metricsState, along
 // with whether a synchronization published them yet. now is the synchronizer's clock.
-func New(metricsState func() ([]bleemeoTypes.MetricState, bool), now func() time.Time) *SyncRegistrationStatus {
-	return &SyncRegistrationStatus{metricsState: metricsState, now: now}
+func New(option types.Option, metricsState func() ([]bleemeoTypes.MetricState, bool), now func() time.Time) *SyncRegistrationStatus {
+	return &SyncRegistrationStatus{option: option, metricsState: metricsState, now: now}
 }
 
 func (s *SyncRegistrationStatus) Name() types.EntityName {
@@ -206,14 +208,14 @@ func (s *SyncRegistrationStatus) SyncRemoteAndLocal(ctx context.Context, _ types
 // files are: the gates that hold a send back are ignored, and the payload last built may be a
 // synchronization behind. Not before registration, as the agent's own metrics cannot be told
 // apart.
-func (s *SyncRegistrationStatus) DiagnosticArchive(archive gloutonTypes.ArchiveWriter, option types.Option) error {
+func (s *SyncRegistrationStatus) DiagnosticArchive(_ context.Context, archive gloutonTypes.ArchiveWriter) error {
 	file, err := archive.Create("bleemeo-registration-status.json")
 	if err != nil {
 		return err
 	}
 
-	agentID, _ := option.State.BleemeoCredentials()
-	last := option.Cache.RegistrationStatusSent()
+	agentID, _ := s.option.State.BleemeoCredentials()
+	last := s.option.Cache.RegistrationStatusSent()
 
 	obj := struct {
 		// LastBuilt is null before registration, or when the store could not be read.
@@ -228,12 +230,12 @@ func (s *SyncRegistrationStatus) DiagnosticArchive(archive gloutonTypes.ArchiveW
 	}
 
 	if agentID != "" {
-		services, err := buildServices(option, agentID)
+		services, err := buildServices(s.option, agentID)
 		if err != nil {
 			logger.V(1).Printf("Unable to read the metrics for the registration status: %v", err)
 		} else {
 			metrics, published := s.metricsState()
-			payload := stampedPayload(services, metrics, published, s.now(), option.Discovery.LastDiscoveryAt())
+			payload := stampedPayload(services, metrics, published, s.now(), s.option.Discovery.LastDiscoveryAt())
 
 			obj.LastBuilt = &payload
 			obj.LastBuiltAccepted = last.Hash != "" && payload.hash == last.Hash

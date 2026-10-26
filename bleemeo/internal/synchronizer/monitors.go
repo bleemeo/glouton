@@ -222,7 +222,7 @@ OuterBreak:
 		result, err := apiClient.GetMonitorByID(ctx, m.uuid)
 		if err != nil {
 			// Delete the monitor locally if it was not found on the API.
-			if IsNotFound(err) {
+			if types.IsNotFound(err) {
 				currentMonitors = deleteMonitorByUUID(currentMonitors, m.uuid)
 
 				continue

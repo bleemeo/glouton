@@ -60,7 +60,7 @@ func TestDiagnosticArchiveFiles(t *testing.T) {
 		t.Fatalf("DiagnosticArchive() failed: %v", err)
 	}
 
-	for _, name := range []string{"bleemeo-sync-state.json", "bleemeo-registration-status.json"} {
+	for _, name := range []string{"bleemeo-sync-state.json", "bleemeo-registration-status.json", "bleemeo-sync-diagnostics.json"} {
 		if archive.files[name] == nil || archive.files[name].Len() == 0 {
 			t.Errorf("%s is missing from the archive", name)
 		}

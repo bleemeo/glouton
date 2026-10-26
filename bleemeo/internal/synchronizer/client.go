@@ -201,15 +201,6 @@ func IsAuthenticationError(err error) bool {
 	return errors.As(err, &authError)
 }
 
-// IsNotFound returns true if the error is an APIError due to 404.
-func IsNotFound(err error) bool {
-	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
-		return apiError.StatusCode == http.StatusNotFound
-	}
-
-	return false
-}
-
 // IsServerError returns true if the error is an APIError due to 5xx.
 func IsServerError(err error) bool {
 	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {

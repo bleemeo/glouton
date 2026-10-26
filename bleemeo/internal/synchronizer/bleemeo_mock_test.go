@@ -38,7 +38,10 @@ type wrapperClientMock struct {
 
 	resources     resourcesSet
 	requestCounts map[string]int
-	errorsCount   int
+	// methodCounts counts the requests by client method, where requestCounts mixes the
+	// methods of a resource. Several entities call the agent resource, for instance.
+	methodCounts map[string]int
+	errorsCount  int
 	// monitorsErr is returned by ListMonitors and GetMonitorByID when set.
 	monitorsErr error
 
@@ -49,6 +52,7 @@ func newClientMock(helper *syncTestHelper) *wrapperClientMock {
 	clientMock := &wrapperClientMock{
 		helper:        helper,
 		requestCounts: make(map[string]int),
+		methodCounts:  make(map[string]int),
 		resources: resourcesSet{
 			agentTypes: resourceHolder[bleemeoTypes.AgentType]{
 				elems: []bleemeoTypes.AgentType{
@@ -100,7 +104,14 @@ func newClientMock(helper *syncTestHelper) *wrapperClientMock {
 
 func (wcm *wrapperClientMock) resetCount() {
 	wcm.requestCounts = make(map[string]int)
+	wcm.methodCounts = make(map[string]int)
 	wcm.errorsCount = 0
+}
+
+// count records a request on resource, made by the client method named method.
+func (wcm *wrapperClientMock) count(resource string, method string) {
+	wcm.requestCounts[resource]++
+	wcm.methodCounts[method]++
 }
 
 func (wcm *wrapperClientMock) ThrottleDeadline() time.Time {
@@ -126,13 +137,13 @@ func (wcm *wrapperClientMock) RegisterSelf(_ context.Context, accountID, passwor
 }
 
 func (wcm *wrapperClientMock) ListApplications(context.Context) ([]bleemeoTypes.Application, error) {
-	wcm.requestCounts[mockAPIResourceApplication]++
+	wcm.count(mockAPIResourceApplication, "ListApplications")
 
 	return wcm.resources.applications.clone(), nil
 }
 
 func (wcm *wrapperClientMock) CreateApplication(_ context.Context, payload bleemeoTypes.Application) (bleemeoTypes.Application, error) {
-	wcm.requestCounts[mockAPIResourceApplication]++
+	wcm.count(mockAPIResourceApplication, "CreateApplication")
 
 	var app bleemeoTypes.Application
 
@@ -147,19 +158,19 @@ func (wcm *wrapperClientMock) CreateApplication(_ context.Context, payload bleem
 }
 
 func (wcm *wrapperClientMock) ListAgentTypes(context.Context) ([]bleemeoTypes.AgentType, error) {
-	wcm.requestCounts[mockAPIResourceAgentType]++
+	wcm.count(mockAPIResourceAgentType, "ListAgentTypes")
 
 	return wcm.resources.agentTypes.clone(), nil
 }
 
 func (wcm *wrapperClientMock) ListConfigs(_ context.Context, _ url.Values) ([]bleemeoTypes.Config, error) {
-	wcm.requestCounts[mockAPIResourceConfig]++
+	wcm.count(mockAPIResourceConfig, "ListConfigs")
 
 	return wcm.resources.configs.clone(), nil
 }
 
 func (wcm *wrapperClientMock) ListAgents(context.Context) ([]bleemeoTypes.Agent, error) {
-	wcm.requestCounts[mockAPIResourceAgent]++
+	wcm.count(mockAPIResourceAgent, "ListAgents")
 
 	agents := make([]bleemeoTypes.Agent, len(wcm.resources.agents.elems))
 	for i, agent := range wcm.resources.agents.elems {
@@ -170,7 +181,7 @@ func (wcm *wrapperClientMock) ListAgents(context.Context) ([]bleemeoTypes.Agent,
 }
 
 func (wcm *wrapperClientMock) UpdateAgent(_ context.Context, id string, data any) (bleemeoTypes.Agent, error) {
-	wcm.requestCounts[mockAPIResourceAgent]++
+	wcm.count(mockAPIResourceAgent, "UpdateAgent")
 
 	agent := wcm.resources.agents.findResource(func(a bleemeoapi.AgentPayload) bool { return a.ID == id })
 	if agent == nil {
@@ -194,7 +205,7 @@ func (wcm *wrapperClientMock) UpdateAgent(_ context.Context, id string, data any
 }
 
 func (wcm *wrapperClientMock) UpdateAgentRegistrationStatus(_ context.Context, id string, _ any) error {
-	wcm.requestCounts[mockAPIResourceAgent]++
+	wcm.count(mockAPIResourceAgent, "UpdateAgentRegistrationStatus")
 
 	agent := wcm.resources.agents.findResource(func(a bleemeoapi.AgentPayload) bool { return a.ID == id })
 	if agent == nil {
@@ -208,31 +219,39 @@ func (wcm *wrapperClientMock) UpdateAgentRegistrationStatus(_ context.Context, i
 }
 
 func (wcm *wrapperClientMock) DeleteAgent(_ context.Context, id string) error {
-	wcm.requestCounts[mockAPIResourceAgent]++
+	wcm.count(mockAPIResourceAgent, "DeleteAgent")
 
 	return wcm.resources.agents.deleteResource(func(a bleemeoapi.AgentPayload) bool { return a.ID == id })
 }
 
 func (wcm *wrapperClientMock) ListGloutonConfigItems(_ context.Context, agentID string) ([]bleemeoTypes.GloutonConfigItem, error) {
-	wcm.requestCounts[mockAPIGloutonConfigItem]++
+	wcm.count(mockAPIGloutonConfigItem, "ListGloutonConfigItems")
 
 	return wcm.resources.gloutonConfigItems.filterResources(func(i bleemeoTypes.GloutonConfigItem) bool { return i.Agent == agentID }), nil
 }
 
-func (wcm *wrapperClientMock) RegisterGloutonConfigItems(ctx context.Context, items []bleemeoTypes.GloutonConfigItem) error {
-	wcm.requestCounts[mockAPIGloutonConfigItem]++
+func (wcm *wrapperClientMock) RegisterGloutonConfigItems(_ context.Context, items []bleemeoTypes.GloutonConfigItem) error {
+	wcm.count(mockAPIGloutonConfigItem, "RegisterGloutonConfigItems")
 
-	panic("implement me")
+	for _, item := range items {
+		item.ID = wcm.resources.gloutonConfigItems.incID()
+
+		if err := wcm.resources.gloutonConfigItems.createResource(&item, &wcm.errorsCount); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-func (wcm *wrapperClientMock) DeleteGloutonConfigItem(ctx context.Context, id string) error {
-	wcm.requestCounts[mockAPIGloutonConfigItem]++
+func (wcm *wrapperClientMock) DeleteGloutonConfigItem(_ context.Context, id string) error {
+	wcm.count(mockAPIGloutonConfigItem, "DeleteGloutonConfigItem")
 
-	panic("implement me")
+	return wcm.resources.gloutonConfigItems.deleteResource(func(i bleemeoTypes.GloutonConfigItem) bool { return i.ID == id })
 }
 
 func (wcm *wrapperClientMock) ListContainers(context.Context, string) ([]bleemeoTypes.Container, error) {
-	wcm.requestCounts[mockAPIResourceContainer]++
+	wcm.count(mockAPIResourceContainer, "ListContainers")
 
 	containers := make([]bleemeoTypes.Container, len(wcm.resources.containers.elems))
 
@@ -244,7 +263,7 @@ func (wcm *wrapperClientMock) ListContainers(context.Context, string) ([]bleemeo
 }
 
 func (wcm *wrapperClientMock) UpdateContainer(_ context.Context, id string, payload any) (bleemeoapi.ContainerPayload, error) {
-	wcm.requestCounts[mockAPIResourceContainer]++
+	wcm.count(mockAPIResourceContainer, "UpdateContainer")
 
 	container := wcm.resources.containers.findResource(func(m bleemeoapi.ContainerPayload) bool { return m.ID == id })
 	if container == nil {
@@ -284,7 +303,7 @@ func (wcm *wrapperClientMock) UpdateContainer(_ context.Context, id string, payl
 }
 
 func (wcm *wrapperClientMock) RegisterContainer(_ context.Context, payload bleemeoapi.ContainerPayload) (bleemeoapi.ContainerPayload, error) {
-	wcm.requestCounts[mockAPIResourceContainer]++
+	wcm.count(mockAPIResourceContainer, "RegisterContainer")
 
 	var result bleemeoapi.ContainerPayload
 
@@ -300,25 +319,25 @@ func (wcm *wrapperClientMock) RegisterContainer(_ context.Context, payload bleem
 }
 
 func (wcm *wrapperClientMock) ListDiagnostics(context.Context) ([]bleemeoapi.RemoteDiagnostic, error) {
-	wcm.requestCounts[mockAPIGloutonDiagnostic]++
+	wcm.count(mockAPIGloutonDiagnostic, "ListDiagnostics")
 
 	return wcm.resources.gloutonDiagnostics.clone(), nil
 }
 
-func (wcm *wrapperClientMock) UploadDiagnostic(ctx context.Context, contentType string, content io.Reader) (time.Duration, error) {
-	wcm.requestCounts[mockAPIGloutonDiagnostic]++
+func (wcm *wrapperClientMock) UploadDiagnostic(context.Context, string, io.Reader) (time.Duration, error) {
+	wcm.count(mockAPIGloutonDiagnostic, "UploadDiagnostic")
 
-	panic("implement me")
+	return 0, nil
 }
 
 func (wcm *wrapperClientMock) ListFacts(context.Context) ([]bleemeoTypes.AgentFact, error) {
-	wcm.requestCounts[mockAPIResourceAgentFact]++
+	wcm.count(mockAPIResourceAgentFact, "ListFacts")
 
 	return wcm.resources.agentFacts.clone(), nil
 }
 
 func (wcm *wrapperClientMock) RegisterFact(_ context.Context, payload bleemeoTypes.AgentFact) (bleemeoTypes.AgentFact, error) {
-	wcm.requestCounts[mockAPIResourceAgentFact]++
+	wcm.count(mockAPIResourceAgentFact, "RegisterFact")
 
 	var result bleemeoTypes.AgentFact
 
@@ -334,13 +353,13 @@ func (wcm *wrapperClientMock) RegisterFact(_ context.Context, payload bleemeoTyp
 }
 
 func (wcm *wrapperClientMock) DeleteFact(ctx context.Context, id string) error {
-	wcm.requestCounts[mockAPIResourceAgentFact]++
+	wcm.count(mockAPIResourceAgentFact, "DeleteFact")
 
 	panic("implement me")
 }
 
 func (wcm *wrapperClientMock) UpdateMetric(_ context.Context, id string, payload any, _ string) error {
-	wcm.requestCounts[mockAPIResourceMetric]++
+	wcm.count(mockAPIResourceMetric, "UpdateMetric")
 
 	metric := wcm.resources.metrics.findResource(func(m bleemeoapi.MetricPayload) bool { return m.ID == id })
 	if metric == nil {
@@ -395,7 +414,11 @@ func (wcm *wrapperClientMock) ListInactiveMetrics(ctx context.Context, stopSearc
 }
 
 func (wcm *wrapperClientMock) listMetrics(_ context.Context, active bool, _ func(string) bool) ([]bleemeoapi.MetricPayload, error) {
-	wcm.requestCounts[mockAPIResourceMetric]++
+	if active {
+		wcm.count(mockAPIResourceMetric, "ListActiveMetrics")
+	} else {
+		wcm.count(mockAPIResourceMetric, "ListInactiveMetrics")
+	}
 
 	metrics := wcm.resources.metrics.filterResources(func(m bleemeoapi.MetricPayload) bool {
 		return active == m.DeactivatedAt.IsZero()
@@ -405,13 +428,13 @@ func (wcm *wrapperClientMock) listMetrics(_ context.Context, active bool, _ func
 }
 
 func (wcm *wrapperClientMock) CountInactiveMetrics(context.Context) (int, error) {
-	wcm.requestCounts[mockAPIResourceMetric]++
+	wcm.count(mockAPIResourceMetric, "CountInactiveMetrics")
 
 	return len(wcm.resources.metrics.filterResources(func(m bleemeoapi.MetricPayload) bool { return !m.DeactivatedAt.IsZero() })), nil
 }
 
 func (wcm *wrapperClientMock) ListMetricsBy(_ context.Context, params url.Values) (map[string]bleemeoTypes.Metric, error) {
-	wcm.requestCounts[mockAPIResourceMetric]++
+	wcm.count(mockAPIResourceMetric, "ListMetricsBy")
 
 	metrics := wcm.resources.metrics.filterResources(func(m bleemeoapi.MetricPayload) bool {
 		if params.Has("labels_text") && m.LabelsText != params.Get("labels_text") {
@@ -442,13 +465,13 @@ func (wcm *wrapperClientMock) ListMetricsBy(_ context.Context, params url.Values
 }
 
 func (wcm *wrapperClientMock) GetMetricByID(ctx context.Context, id string) (bleemeoapi.MetricPayload, error) {
-	wcm.requestCounts[mockAPIResourceMetric]++
+	wcm.count(mockAPIResourceMetric, "GetMetricByID")
 
 	panic("implement me")
 }
 
 func (wcm *wrapperClientMock) RegisterMetric(_ context.Context, payload bleemeoapi.MetricPayload) (bleemeoapi.MetricPayload, error) {
-	wcm.requestCounts[mockAPIResourceMetric]++
+	wcm.count(mockAPIResourceMetric, "RegisterMetric")
 
 	var result bleemeoapi.MetricPayload
 
@@ -464,13 +487,13 @@ func (wcm *wrapperClientMock) RegisterMetric(_ context.Context, payload bleemeoa
 }
 
 func (wcm *wrapperClientMock) DeleteMetric(ctx context.Context, id string) error {
-	wcm.requestCounts[mockAPIResourceMetric]++
+	wcm.count(mockAPIResourceMetric, "DeleteMetric")
 
 	panic("implement me")
 }
 
 func (wcm *wrapperClientMock) SetMetricActive(_ context.Context, id string, active bool) error {
-	wcm.requestCounts[mockAPIResourceMetric]++
+	wcm.count(mockAPIResourceMetric, "SetMetricActive")
 
 	predicate := func(m bleemeoapi.MetricPayload) bool { return m.ID == id }
 
@@ -502,7 +525,7 @@ func (wcm *wrapperClientMock) SetMetricActive(_ context.Context, id string, acti
 }
 
 func (wcm *wrapperClientMock) ListMonitors(context.Context) ([]bleemeoTypes.Monitor, error) {
-	wcm.requestCounts[mockAPIResourceMonitor]++
+	wcm.count(mockAPIResourceMonitor, "ListMonitors")
 
 	if wcm.monitorsErr != nil {
 		return nil, wcm.monitorsErr
@@ -513,7 +536,7 @@ func (wcm *wrapperClientMock) ListMonitors(context.Context) ([]bleemeoTypes.Moni
 }
 
 func (wcm *wrapperClientMock) GetMonitorByID(_ context.Context, id string) (bleemeoTypes.Monitor, error) {
-	wcm.requestCounts[mockAPIResourceMonitor]++
+	wcm.count(mockAPIResourceMonitor, "GetMonitorByID")
 
 	if wcm.monitorsErr != nil {
 		return bleemeoTypes.Monitor{}, wcm.monitorsErr
@@ -531,7 +554,7 @@ func (wcm *wrapperClientMock) GetMonitorByID(_ context.Context, id string) (blee
 }
 
 func (wcm *wrapperClientMock) ListServices(_ context.Context, agentID string, _ string) ([]bleemeoTypes.Service, error) {
-	wcm.requestCounts[mockAPIResourceService]++
+	wcm.count(mockAPIResourceService, "ListServices")
 
 	services := make([]bleemeoTypes.Service, 0, len(wcm.resources.services.elems))
 
@@ -547,7 +570,7 @@ func (wcm *wrapperClientMock) ListServices(_ context.Context, agentID string, _ 
 }
 
 func (wcm *wrapperClientMock) UpdateService(_ context.Context, id string, payload bleemeoapi.ServicePayload, _ string) (bleemeoTypes.Service, error) {
-	wcm.requestCounts[mockAPIResourceService]++
+	wcm.count(mockAPIResourceService, "UpdateService")
 
 	service := wcm.resources.services.findResource(func(s bleemeoapi.ServicePayload) bool { return s.ID == id })
 	if service == nil {
@@ -571,7 +594,7 @@ func (wcm *wrapperClientMock) UpdateService(_ context.Context, id string, payloa
 }
 
 func (wcm *wrapperClientMock) RegisterService(_ context.Context, payload bleemeoapi.ServicePayload) (bleemeoTypes.Service, error) {
-	wcm.requestCounts[mockAPIResourceService]++
+	wcm.count(mockAPIResourceService, "RegisterService")
 
 	payload.ID = wcm.resources.services.incID()
 
@@ -579,13 +602,13 @@ func (wcm *wrapperClientMock) RegisterService(_ context.Context, payload bleemeo
 }
 
 func (wcm *wrapperClientMock) DeleteService(ctx context.Context, id string) error {
-	wcm.requestCounts[mockAPIResourceService]++
+	wcm.count(mockAPIResourceService, "DeleteService")
 
 	panic("implement me")
 }
 
 func (wcm *wrapperClientMock) RegisterSNMPAgent(_ context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
-	wcm.requestCounts[mockAPIResourceAgent]++
+	wcm.count(mockAPIResourceAgent, "RegisterSNMPAgent")
 
 	payload.ID = wcm.resources.agents.incID()
 
@@ -593,13 +616,13 @@ func (wcm *wrapperClientMock) RegisterSNMPAgent(_ context.Context, payload bleem
 }
 
 func (wcm *wrapperClientMock) UpdateAgentLastDuplicationDate(ctx context.Context, agentID string, lastDuplicationDate time.Time) error {
-	wcm.requestCounts[mockAPIResourceAgent]++
+	wcm.count(mockAPIResourceAgent, "UpdateAgentLastDuplicationDate")
 
 	panic("implement me")
 }
 
 func (wcm *wrapperClientMock) RegisterVSphereAgent(ctx context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
-	wcm.requestCounts[mockAPIResourceAgent]++
+	wcm.count(mockAPIResourceAgent, "RegisterVSphereAgent")
 
 	panic("implement me")
 }

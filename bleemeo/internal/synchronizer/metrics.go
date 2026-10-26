@@ -971,7 +971,7 @@ func (s *Synchronizer) metricUpdateListUUID(ctx context.Context, apiClient types
 
 	for _, key := range requests {
 		metric, err := apiClient.GetMetricByID(ctx, key)
-		if err != nil && IsNotFound(err) {
+		if err != nil && types.IsNotFound(err) {
 			delete(metricsByUUID, key)
 
 			continue
@@ -1488,7 +1488,7 @@ func (s *Synchronizer) metricUpdateOne(ctx context.Context, apiClient types.Metr
 
 	if shouldMarkActive {
 		err := apiClient.SetMetricActive(ctx, remoteMetric.ID, true)
-		if err != nil && IsNotFound(err) {
+		if err != nil && types.IsNotFound(err) {
 			return remoteMetric, needRegisterError{remoteMetric: remoteMetric}
 		} else if err != nil {
 			return remoteMetric, err
@@ -1517,7 +1517,7 @@ func (s *Synchronizer) metricDeleteIgnoredServices(ctx context.Context, apiClien
 			err := apiClient.DeleteMetric(ctx, metric.ID)
 
 			// If the metric wasn't found, it has already been deleted.
-			if err != nil && !IsNotFound(err) {
+			if err != nil && !types.IsNotFound(err) {
 				return err
 			}
 
@@ -1643,7 +1643,7 @@ func (s *Synchronizer) metricDeactivate(ctx context.Context, apiClient types.Met
 		logger.V(2).Printf("Mark inactive the metric %v (uuid %s). Reason: %s", key, v.ID, deactivateReason)
 
 		err := apiClient.SetMetricActive(ctx, v.ID, false)
-		if err != nil && IsNotFound(err) {
+		if err != nil && types.IsNotFound(err) {
 			delete(registeredMetrics, k)
 
 			continue

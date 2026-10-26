@@ -75,6 +75,9 @@ type syncTestHelper struct {
 	// Following fields are options used by some method
 	SNMP               []*snmp.Target
 	NotifyLabelsUpdate func()
+	ConfigItems        []config.Item
+	// ReloadState is kept across initSynchronizer, as Glouton keeps it across reloads.
+	ReloadState bleemeoTypes.BleemeoReloadState
 }
 
 // newHelper create an helper with all permanent resource: API, cache, state.
@@ -164,6 +167,8 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 		IsMqttConnected:            func() bool { return false },
 		ProvideClient:              func() types.Client { return helper.wrapperClientMock },
 		Config:                     helper.cfg,
+		ConfigItems:                helper.ConfigItems,
+		ReloadState:                helper.ReloadState,
 		Facts:                      helper.facts,
 		State:                      helper.state,
 		Docker:                     docker,
