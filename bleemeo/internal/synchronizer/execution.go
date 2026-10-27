@@ -321,10 +321,10 @@ func (e *Execution) run(ctx context.Context) error {
 
 		e.applyNeedSynchronization(ctx)
 
-		if e.hadWork() && e.synchronizer.now().Sub(e.synchronizer.lastInfo.FetchedAt) > 30*time.Minute {
-			// Ensure lastInfo is enough up-to-date.
-			// This will help detection quickly a change on /v1/info/ and will ensure the
-			// metric time_drift is updated recently to avoid unwanted deactivation.
+		// Info is synchronized when the execution has work anyway and info is outdated. Info
+		// can't declare this in its NeedSynchronization: it depends on whether other entities
+		// run.
+		if e.hadWork() && e.synchronizer.info.IsOutdated() {
 			e.RequestSynchronization(types.EntityInfo, false)
 		}
 	}
@@ -482,6 +482,28 @@ func (e *Execution) applyNeedSynchronization(ctx context.Context) {
 			}
 		}
 	})
+
+	for idx := range e.entities {
+		ee := &e.entities[idx]
+
+		entity, ok := ee.entity.(types.NeedSynchronizationWhileSkipped)
+		if !ok || !entity.NeedSynchronizationWhileSkipped() || !errors.Is(ee.err, errSkippedExecution) {
+			continue
+		}
+
+		if ee.synchronizer == nil {
+			synchronizer, err := ee.entity.PrepareExecution(ctx, e)
+			if err != nil {
+				continue
+			}
+
+			ee.synchronizer = synchronizer
+		}
+
+		if need, err := ee.synchronizer.NeedSynchronization(ctx); err == nil && need && ee.syncType == types.SyncTypeNone {
+			ee.syncType = types.SyncTypeNormal
+		}
+	}
 }
 
 func (e *Execution) checkLinkedSynchronization() {
@@ -614,7 +636,7 @@ func (e *Execution) synchronizersCall(ctx context.Context, f func(context.Contex
 		until, reason := e.synchronizer.getDisabledUntil()
 		if e.synchronizer.now().Before(until) {
 			// If the agent was disabled because it is too old, we do not want the synchronizer
-			// to throw a DisableTooManyErrors because syncInfo() disabled the bleemeo connector.
+			// to throw a DisableTooManyErrors because info disabled the bleemeo connector.
 			// This could alter the synchronizer would wait to sync again, and we do not desire it.
 			// This would also show errors that could confuse the user like "Synchronization with
 			// Bleemeo Cloud platform still have to wait 1m27s due to too many errors".

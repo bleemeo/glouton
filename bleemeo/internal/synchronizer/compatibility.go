@@ -33,20 +33,13 @@ type synchronizerState struct {
 	metricRetryAt        time.Time
 	lastMetricCount      int
 	lastMetricActivation time.Time
-
-	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
-	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive
-	// notifications to tell us the backend is out of maintenance. So we resort to HTTP polling every 15
-	// minutes to check whether we are still in maintenance of not.
-	lastMaintenanceSync time.Time
 }
 
 type CompatibilityWrapper struct {
-	name                 types.EntityName
-	enabledInMaintenance bool
-	skipOnlyEssential    bool
-	method               func(context.Context, types.SyncType, types.SynchronizationExecution) (updateThresholds bool, err error)
-	state                *synchronizerState
+	name              types.EntityName
+	skipOnlyEssential bool
+	method            func(context.Context, types.SyncType, types.SynchronizationExecution) (updateThresholds bool, err error)
+	state             *synchronizerState
 }
 
 type CompatibilityWrapperExecution struct {
@@ -60,7 +53,7 @@ func (cw *CompatibilityWrapper) Name() types.EntityName {
 }
 
 func (cw *CompatibilityWrapper) EnabledInMaintenance() bool {
-	return cw.enabledInMaintenance
+	return false
 }
 
 func (cw *CompatibilityWrapper) EnabledInSuspendedMode() bool {
@@ -115,7 +108,6 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 	localFacts, _ := option.Facts.Facts(ctx, 24*time.Hour)
 	_, lastDiscovery := option.Discovery.GetLatestDiscovery()
 	currentMetricCount := option.Store.MetricsCount()
-	mqttIsConnected := option.IsMqttConnected()
 	lastAnnotationChange := option.LastMetricAnnotationChange()
 
 	state.l.Lock()
@@ -150,13 +142,5 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 
 	if execution.StartedAt().After(state.metricRetryAt) || execution.LastSuccessfulSync().Before(lastDiscovery) || execution.LastSuccessfulSync().Before(lastAnnotationChange) || state.lastMetricCount != currentMetricCount {
 		execution.RequestSynchronization(types.EntityMetric, false)
-	}
-
-	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
-	// mode, so we poll more often.
-	if execution.GlobalState().IsMaintenance() && !mqttIsConnected && execution.StartedAt().After(state.lastMaintenanceSync.Add(15*time.Minute)) {
-		execution.RequestSynchronization(types.EntityInfo, false)
-
-		state.lastMaintenanceSync = execution.StartedAt()
 	}
 }

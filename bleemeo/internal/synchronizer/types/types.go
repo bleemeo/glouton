@@ -37,6 +37,9 @@ import (
 	gloutonTypes "github.com/bleemeo/glouton/types"
 )
 
+// AgentStatusName is the name of the special metric storing the agent connection status.
+const AgentStatusName = "agent_status"
+
 type EntityName string
 
 const (
@@ -147,6 +150,14 @@ type EntitySynchronizer interface {
 	EnabledInSuspendedMode() bool
 
 	PrepareExecution(ctx context.Context, execution SynchronizationExecution) (EntitySynchronizerExecution, error)
+}
+
+// NeedSynchronizationWhileSkipped is implemented by the entity synchronizers whose
+// NeedSynchronization is called even while they are skipped, in maintenance or suspended mode,
+// when NeedSynchronizationWhileSkipped returns true. The entity stays skipped: a synchronization
+// it needs is requested again until an execution where it can run.
+type NeedSynchronizationWhileSkipped interface {
+	NeedSynchronizationWhileSkipped() bool
 }
 
 // DiagnosticArchiver is implemented by the entity synchronizers that add their state to the
@@ -352,8 +363,8 @@ type Option struct {
 	SetInitialized func()
 
 	// IsMqttConnected returns whether the MQTT connector is operating nominally, and specifically
-	// that it can receive mqtt notifications. It is useful for the fallback on http polling
-	// described above Synchronizer.lastMaintenanceSync definition.
+	// that it can receive mqtt notifications. While it can't, the end of a maintenance is
+	// checked by polling /v1/info/.
 	// Note: returns false when the mqtt connector is not enabled.
 	IsMqttConnected func() bool
 

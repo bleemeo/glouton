@@ -42,7 +42,7 @@ import (
 )
 
 // agentStatusName is the name of the special metrics used to store the agent connection status.
-const agentStatusName = "agent_status"
+const agentStatusName = types.AgentStatusName
 
 // Metric name constants used across synchronizer code.
 const (

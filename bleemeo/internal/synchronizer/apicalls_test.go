@@ -69,7 +69,7 @@ func (vSphereVMMock) LatestError() error       { return nil }
 // It guards the migration of the entities to their sub-packages: the calls must not change.
 // The steps stay less than 15 minutes apart, except the full synchronization, so the periodic
 // duplicated agent check, jittered between 15 and 25 minutes, always runs at the same steps.
-func TestAPICallsBaseline(t *testing.T) {
+func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a table of steps.
 	helper := newHelper(t)
 	defer helper.Close()
 
@@ -82,6 +82,10 @@ func TestAPICallsBaseline(t *testing.T) {
 	helper.SetAPIConfigs(append(slices.Clone(defaultAccountConfigs), bleemeoTypes.Config{
 		ID: "cfg-vsphere-int", Type: bleemeoTypes.ConfigTypeVSphereIntegration, Account: accountID, Value: true,
 	}))
+
+	// MQTT is unreachable: no connection can be made to port 0.
+	helper.cfg.Bleemeo.MQTT.Host = "127.0.0.1"
+	helper.cfg.Bleemeo.MQTT.Port = 0
 
 	// The SNMP target is offline until its step.
 	snmpOnline := 0
@@ -120,11 +124,14 @@ func TestAPICallsBaseline(t *testing.T) {
 		prepare   func()
 		wantCalls map[string]int
 		wantSync  map[types.EntityName]types.SyncType
+		// wantErr is whether the synchronization fails, because the connector got disabled.
+		wantErr bool
 	}{
 		{
 			// Includes the execution limited to config, agent and metric that follows the registration.
 			name: "registration",
 			wantCalls: map[string]int{
+				"GetGlobalInfo":              1,
 				"ListActiveMetrics":          2,
 				"ListAgentTypes":             2,
 				"ListAgents":                 2,
@@ -223,6 +230,7 @@ func TestAPICallsBaseline(t *testing.T) {
 			},
 			// The duplicated agent check is due again, it makes the ListFacts.
 			wantCalls: map[string]int{
+				"GetGlobalInfo":          1,
 				"ListActiveMetrics":      1,
 				"ListAgentTypes":         1,
 				"ListAgents":             1,
@@ -239,6 +247,114 @@ func TestAPICallsBaseline(t *testing.T) {
 			wantSync: fullSync,
 		},
 		{
+			name: "maintenance enabled",
+			prepare: func() {
+				helper.wrapperClientMock.globalInfo.MaintenanceEnabled = true
+
+				helper.s.UpdateMaintenance(0)
+			},
+			wantCalls: map[string]int{"GetGlobalInfo": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeNormal},
+		},
+		{
+			// MQTT is disconnected: the maintenance is polled, at most every 15 minutes.
+			// The agent is skipped, it is requested again on each execution.
+			name: "maintenance polled",
+			prepare: func() {
+				helper.s.UpdateK8SAgentList()
+			},
+			wantCalls: map[string]int{"GetGlobalInfo": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityInfo:  types.SyncTypeNormal,
+				types.EntityAgent: types.SyncTypeForceCacheRefresh,
+			},
+		},
+		{
+			name:     "maintenance not polled again",
+			wantSync: map[types.EntityName]types.SyncType{types.EntityAgent: types.SyncTypeForceCacheRefresh},
+		},
+		{
+			// Leaving the maintenance checks for a duplicated agent, it makes the ListFacts.
+			// The agent was skipped before info left the maintenance: it runs on the next execution.
+			name: "maintenance disabled",
+			prepare: func() {
+				helper.wrapperClientMock.globalInfo.MaintenanceEnabled = false
+
+				helper.s.UpdateMaintenance(0)
+			},
+			wantCalls: map[string]int{"GetGlobalInfo": 1, "ListFacts": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityInfo:  types.SyncTypeNormal,
+				types.EntityAgent: types.SyncTypeForceCacheRefresh,
+			},
+		},
+		{
+			name:      "after maintenance",
+			wantCalls: map[string]int{"ListAgents": 1, "UpdateAgent": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityAgent: types.SyncTypeForceCacheRefresh},
+		},
+		{
+			// MQTT isn't reachable: agent_status is marked critical.
+			name: "MQTT disconnected",
+			prepare: func() {
+				helper.s.SetMQTTConnected(false)
+			},
+			wantCalls: map[string]int{"GetGlobalInfo": 1, "UpdateMetric": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeNormal},
+		},
+		{
+			name: "MQTT still disconnected",
+			prepare: func() {
+				helper.s.SetMQTTConnected(false)
+			},
+		},
+		{
+			// The connector is disabled, and agent_status is marked critical.
+			name: "time drift",
+			prepare: func() {
+				helper.wrapperClientMock.globalInfo.CurrentTime = float64(helper.Now().Add(-time.Hour).Unix())
+				helper.wrapperClientMock.globalInfo.MaxTimeDrift = 60
+
+				helper.s.UpdateInfo()
+			},
+			wantCalls: map[string]int{"GetGlobalInfo": 1, "UpdateMetric": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeNormal},
+			wantErr:   true,
+		},
+		{
+			// The connector is enabled again, as Connector.UpdateInfo does. Info runs because it
+			// requested itself when it disabled the connector.
+			name: "time drift fixed",
+			prepare: func() {
+				helper.wrapperClientMock.globalInfo.CurrentTime = 0
+
+				helper.s.ClearDisable(bleemeoTypes.DisableTimeDrift, 0)
+			},
+			wantCalls: map[string]int{"GetGlobalInfo": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeForceCacheRefresh},
+		},
+		{
+			// An invalid minimum version is newer than any version.
+			name: "agent too old",
+			prepare: func() {
+				helper.wrapperClientMock.globalInfo.Agents.MinVersions.Glouton = "invalid version"
+
+				helper.s.UpdateInfo()
+			},
+			wantCalls: map[string]int{"GetGlobalInfo": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeNormal},
+		},
+		{
+			name: "agent upgraded",
+			prepare: func() {
+				helper.wrapperClientMock.globalInfo.Agents.MinVersions.Glouton = ""
+
+				helper.s.ClearDisable(bleemeoTypes.DisableAgentTooOld, 0)
+			},
+			wantCalls: map[string]int{"GetGlobalInfo": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeForceCacheRefresh},
+		},
+		{
 			name: "reload",
 			prepare: func() {
 				helper.initSynchronizer(t)
@@ -246,7 +362,7 @@ func TestAPICallsBaseline(t *testing.T) {
 			// The config items are synchronized again after a reload, without waiting for the next
 			// full synchronization. The new Synchronizer also checks for a duplicated agent, and
 			// sees the SNMP and vSphere changes again.
-			wantCalls: map[string]int{"ListFacts": 1, "ListGloutonConfigItems": 1},
+			wantCalls: map[string]int{"GetGlobalInfo": 1, "ListFacts": 1, "ListGloutonConfigItems": 1},
 			wantSync: map[types.EntityName]types.SyncType{
 				types.EntityInfo:          types.SyncTypeNormal,
 				types.EntityFact:          types.SyncTypeNormal,
@@ -274,8 +390,8 @@ func TestAPICallsBaseline(t *testing.T) {
 		}
 
 		result := helper.runOnceWithResult(t)
-		if result.err != nil {
-			t.Fatalf("step %q: runOnce failed: %v", step.name, result.err)
+		if (result.err != nil) != step.wantErr {
+			t.Fatalf("step %q: runOnce error = %v, want error %v", step.name, result.err, step.wantErr)
 		}
 
 		if diff := cmp.Diff(step.wantCalls, helper.wrapperClientMock.methodCounts, cmpopts.EquateEmpty()); diff != "" {
@@ -284,6 +400,67 @@ func TestAPICallsBaseline(t *testing.T) {
 
 		if diff := cmp.Diff(step.wantSync, result.syncPerEntity, cmpopts.EquateEmpty()); diff != "" {
 			t.Errorf("step %q: synchronized entities mismatch (-want +got)\n%s", step.name, diff)
+		}
+	}
+}
+
+// TestSyncInfoBeforeFirstExecution checks what info requests before the synchronization loop,
+// like a synchronization of itself after disabling the connector, is kept for the loop.
+func TestSyncInfoBeforeFirstExecution(t *testing.T) {
+	t.Parallel()
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	// An invalid minimum version is newer than any version.
+	helper.wrapperClientMock.globalInfo.Agents.MinVersions.Glouton = "invalid version"
+	helper.initSynchronizer(t)
+
+	helper.s.syncInfoBeforeFirstExecution(t.Context(), false)
+
+	if _, reason := helper.s.getDisabledUntil(); reason != bleemeoTypes.DisableAgentTooOld {
+		t.Errorf("disable reason = %v, want %v", reason, bleemeoTypes.DisableAgentTooOld)
+	}
+
+	want := map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeForceCacheRefresh}
+	if diff := cmp.Diff(want, syncTypeByEntity(helper.s.forceSync)); diff != "" {
+		t.Errorf("requested synchronizations mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// TestMaintenancePolledWhileSuspended checks the maintenance is polled in suspended mode too:
+// info is requested, and stays requested until it can run.
+func TestMaintenancePolledWhileSuspended(t *testing.T) {
+	t.Parallel()
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	helper.s.SetMaintenance(t.Context(), true)
+	helper.s.SetSuspended(true)
+
+	for _, name := range []string{"polled", "requested again"} {
+		helper.AddTime(time.Minute)
+
+		result := helper.runOnceWithResult(t)
+		if result.err != nil {
+			t.Fatalf("%s: runOnce failed: %v", name, result.err)
+		}
+
+		if got := result.syncPerEntity[types.EntityInfo]; got != types.SyncTypeNormal {
+			t.Errorf("%s: info sync type = %v, want %v", name, got, types.SyncTypeNormal)
+		}
+
+		if got := helper.wrapperClientMock.methodCounts["GetGlobalInfo"]; got != 0 {
+			t.Errorf("%s: GetGlobalInfo called %d times, want 0 (info is skipped)", name, got)
 		}
 	}
 }
