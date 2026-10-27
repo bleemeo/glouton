@@ -417,7 +417,7 @@ func TestSyncInfoBeforeFirstExecution(t *testing.T) {
 	helper.wrapperClientMock.globalInfo.Agents.MinVersions.Glouton = "invalid version"
 	helper.initSynchronizer(t)
 
-	helper.s.syncInfoBeforeFirstExecution(t.Context(), false)
+	helper.s.syncInfoBeforeFirstExecution(t.Context())
 
 	if _, reason := helper.s.getDisabledUntil(); reason != bleemeoTypes.DisableAgentTooOld {
 		t.Errorf("disable reason = %v, want %v", reason, bleemeoTypes.DisableAgentTooOld)
@@ -461,6 +461,48 @@ func TestMaintenancePolledWhileSuspended(t *testing.T) {
 
 		if got := helper.wrapperClientMock.methodCounts["GetGlobalInfo"]; got != 0 {
 			t.Errorf("%s: GetGlobalInfo called %d times, want 0 (info is skipped)", name, got)
+		}
+	}
+}
+
+// TestInfoSynchronizedWithOthers checks info is synchronized when it is older than 30 minutes
+// and the execution synchronizes other entities, and only then.
+func TestInfoSynchronizedWithOthers(t *testing.T) {
+	t.Parallel()
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, step := range []struct {
+		name      string
+		elapsed   time.Duration
+		otherWork bool
+		want      types.SyncType
+	}{
+		{name: "outdated, no other work", elapsed: 31 * time.Minute},
+		{name: "outdated, other work", otherWork: true, want: types.SyncTypeNormal},
+		{name: "recent, other work", elapsed: time.Minute, otherWork: true},
+	} {
+		helper.AddTime(step.elapsed)
+
+		if step.otherWork {
+			helper.s.UpdateK8SAgentList()
+		}
+
+		result := helper.runOnceWithResult(t)
+		if result.err != nil {
+			t.Fatalf("%s: runOnce failed: %v", step.name, result.err)
+		}
+
+		if got := result.syncPerEntity[types.EntityInfo]; got != step.want {
+			t.Errorf("%s: info sync type = %v, want %v", step.name, got, step.want)
 		}
 	}
 }

@@ -18,10 +18,18 @@ package syncinfo
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"errors"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -42,10 +50,22 @@ const (
 	testAgentStatusID = "agent-status-id"
 )
 
+// newTestClock returns a clock at the time the tests start.
+func newTestClock() *fakeClock {
+	return &fakeClock{now: time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)}
+}
+
+// timeDriftMark returns the update marking agent_status for the time drift.
+func timeDriftMark() []agentStatusUpdatePayload {
+	return []agentStatusUpdatePayload{{
+		CurrentStatus:     bleemeo.Status_Critical,
+		StatusDescription: []string{"Agent local time too different from actual time"},
+	}}
+}
+
 var (
-	errExpiredCertificate = errors.New("tls: failed to verify certificate: x509: certificate has expired or is not yet valid")
-	errConnectionRefused  = errors.New("connection refused")
-	errAPIDown            = errors.New("API down")
+	errConnectionRefused = errors.New("connection refused")
+	errAPIDown           = errors.New("API down")
 )
 
 // fakeClient returns globalInfo, or err, and records the metric updates. Any other call
@@ -81,9 +101,11 @@ func (c *fakeClient) UpdateMetric(_ context.Context, id string, payload any, _ s
 
 type fakeState struct {
 	bleemeoTypes.State
+
+	agentID string
 }
 
-func (fakeState) BleemeoCredentials() (string, string) { return testAgentID, "password" }
+func (s fakeState) BleemeoCredentials() (string, string) { return s.agentID, "password" }
 
 type fakeGlobalState struct {
 	types.SynchronizedGlobalState
@@ -110,6 +132,8 @@ type fakeExecution struct {
 	startedAt     time.Time
 	maintenance   bool
 	mqttConnected bool
+	// agentID is the agent ID of the State, empty before the registration.
+	agentID string
 	// noState gives a nil State.
 	noState bool
 
@@ -133,6 +157,7 @@ func newFakeExecution(globalInfo bleemeoTypes.GlobalInfo) *fakeExecution {
 		client:    &fakeClient{globalInfo: globalInfo},
 		cache:     c,
 		appender:  model.NewBufferAppender(),
+		agentID:   testAgentID,
 		requested: make(map[types.EntityName]bool),
 	}
 }
@@ -168,7 +193,7 @@ func (e *fakeExecution) state() bleemeoTypes.State {
 		return nil
 	}
 
-	return fakeState{}
+	return fakeState{agentID: e.agentID}
 }
 
 type fakeClock struct {
@@ -193,8 +218,9 @@ func newEntity(clock *fakeClock) *SyncInfo {
 	return s
 }
 
-// run runs one execution of the entity, which was requested.
-func run(t *testing.T, s *SyncInfo, execution *fakeExecution) {
+// runWithError runs one execution of the entity, which was requested, and returns the error of
+// SyncRemoteAndLocal.
+func runWithError(t *testing.T, s *SyncInfo, execution *fakeExecution) error {
 	t.Helper()
 
 	e, err := s.PrepareExecution(t.Context(), execution)
@@ -208,8 +234,24 @@ func run(t *testing.T, s *SyncInfo, execution *fakeExecution) {
 		t.Fatal(err)
 	}
 
-	if err := e.SyncRemoteAndLocal(t.Context(), types.SyncTypeNormal); err != nil {
+	return e.SyncRemoteAndLocal(t.Context(), types.SyncTypeNormal)
+}
+
+// run runs one execution of the entity, which was requested.
+func run(t *testing.T, s *SyncInfo, execution *fakeExecution) {
+	t.Helper()
+
+	if err := runWithError(t, s, execution); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// checkMaintenanceSet checks the entity set the maintenance mode to true.
+func checkMaintenanceSet(t *testing.T, name string, execution *fakeExecution) {
+	t.Helper()
+
+	if execution.maintenanceSet == nil || !*execution.maintenanceSet {
+		t.Errorf("%s: maintenance set = %v, want true", name, execution.maintenanceSet)
 	}
 }
 
@@ -218,7 +260,7 @@ func run(t *testing.T, s *SyncInfo, execution *fakeExecution) {
 func TestMaintenancePolling(t *testing.T) {
 	t.Parallel()
 
-	start := time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)
+	start := newTestClock().now
 	s := newEntity(&fakeClock{now: start})
 
 	for _, step := range []struct {
@@ -260,24 +302,26 @@ func TestMaintenancePolling(t *testing.T) {
 func TestApplyMaintenance(t *testing.T) {
 	t.Parallel()
 
-	clock := &fakeClock{now: time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)}
+	clock := newTestClock()
 	s := newEntity(clock)
 
 	execution := newFakeExecution(bleemeoTypes.GlobalInfo{MaintenanceEnabled: true})
 	run(t, s, execution)
 
-	if execution.maintenanceSet == nil || !*execution.maintenanceSet {
-		t.Errorf("maintenance set = %v, want true", execution.maintenanceSet)
-	}
+	checkMaintenanceSet(t, "fetched", execution)
 
 	if got := s.LastInfo().FetchedAt; !got.Equal(clock.now) {
 		t.Errorf("LastInfo().FetchedAt = %v, want %v", got, clock.now)
 	}
 
+	if s.NeedSynchronizationWithOthers() {
+		t.Error("NeedSynchronizationWithOthers() = true just after a fetch, want false")
+	}
+
 	clock.now = clock.now.Add(time.Hour)
 
-	if !s.IsOutdated() {
-		t.Error("IsOutdated() = false after an hour, want true")
+	if !s.NeedSynchronizationWithOthers() {
+		t.Error("NeedSynchronizationWithOthers() = false after an hour, want true")
 	}
 
 	execution = newFakeExecution(bleemeoTypes.GlobalInfo{})
@@ -297,7 +341,7 @@ func TestApplyMaintenance(t *testing.T) {
 func TestAgentTooOld(t *testing.T) {
 	t.Parallel()
 
-	clock := &fakeClock{now: time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)}
+	clock := newTestClock()
 	s := newEntity(clock)
 
 	globalInfo := bleemeoTypes.GlobalInfo{}
@@ -325,28 +369,21 @@ func TestAgentTooOld(t *testing.T) {
 func TestTimeDrift(t *testing.T) {
 	t.Parallel()
 
-	clock := &fakeClock{now: time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)}
+	clock := newTestClock()
 	s := newEntity(clock)
 	drifting := bleemeoTypes.GlobalInfo{
 		CurrentTime:  float64(clock.now.Add(-time.Hour).Unix()),
 		MaxTimeDrift: 60,
 	}
 
-	// Before the first execution, with disableOnTimeDrift false, the connector stays enabled.
 	execution := newFakeExecution(drifting)
-	if err := s.SyncBeforeFirstExecution(t.Context(), execution, false); err != nil {
-		t.Fatal(err)
+	run(t, s, execution)
+
+	if len(execution.disabled) != 1 || execution.disabled[0].reason != bleemeoTypes.DisableTimeDrift {
+		t.Errorf("disabled = %v, want once for the time drift", execution.disabled)
 	}
 
-	if len(execution.disabled) != 0 {
-		t.Errorf("disabled = %v, want not disabled before the first execution", execution.disabled)
-	}
-
-	want := []agentStatusUpdatePayload{{
-		CurrentStatus:     bleemeo.Status_Critical,
-		StatusDescription: []string{"Agent local time too different from actual time"},
-	}}
-	if diff := cmp.Diff(want, execution.client.statusUpdates); diff != "" {
+	if diff := cmp.Diff(timeDriftMark(), execution.client.statusUpdates); diff != "" {
 		t.Errorf("agent_status updates mismatch (-want +got)\n%s", diff)
 	}
 
@@ -359,7 +396,7 @@ func TestTimeDrift(t *testing.T) {
 		t.Errorf("pushed metrics = %v, want time_drift of an hour", mfs)
 	}
 
-	// Still drifting: the connector is disabled, agent_status isn't updated again.
+	// Still drifting: the connector is disabled again, agent_status isn't updated again.
 	clock.now = clock.now.Add(time.Minute)
 	drifting.CurrentTime += time.Minute.Seconds()
 
@@ -384,7 +421,7 @@ func TestTimeDrift(t *testing.T) {
 func TestMQTTStatus(t *testing.T) {
 	t.Parallel()
 
-	s := newEntity(&fakeClock{now: time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)})
+	s := newEntity(newTestClock())
 
 	dialed := 0
 	reachable := true
@@ -441,87 +478,154 @@ func TestMQTTStatus(t *testing.T) {
 	}
 }
 
-// TestFetchExpiredCertificate checks the global information is fetched again without checking
-// the certificate when it looks expired, as when the local time is far off.
+// expiredCertificate returns a self-signed certificate for 127.0.0.1 that expired an hour ago.
+func expiredCertificate(t *testing.T) tls.Certificate {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "api"},
+		NotBefore:             time.Now().Add(-48 * time.Hour),
+		NotAfter:              time.Now().Add(-time.Hour),
+		IPAddresses:           []net.IP{net.IPv4(127, 0, 0, 1)},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaf, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key, Leaf: leaf}
+}
+
+// TestFetchExpiredCertificate checks the global information is fetched again when the
+// certificate looks expired, as when the local time is far off: the certificate is then
+// verified at a time when it is valid.
 func TestFetchExpiredCertificate(t *testing.T) {
 	t.Parallel()
 
-	status := http.StatusOK
+	certificate := expiredCertificate(t)
+	trusted := x509.NewCertPool()
+	trusted.AddCert(certificate.Leaf)
 
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/info/" {
 			http.NotFound(w, r)
 
 			return
 		}
 
-		w.WriteHeader(status)
+		if r.URL.Query().Get("status") == "503" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+
+			return
+		}
+
 		_, _ = w.Write([]byte(`{"maintenance": true, "current_time": 1700000000, "max_time_drift": 3600}`))
 	}))
+	server.TLS = &tls.Config{Certificates: []tls.Certificate{certificate}}
+	server.StartTLS()
+
 	defer server.Close()
 
-	clock := &fakeClock{now: time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)}
-	requestCounter := &atomic.Uint32{}
-	s := New(requestCounter, clock.Now)
-	s.dial = dialReachable
-
-	execution := newFakeExecution(bleemeoTypes.GlobalInfo{})
-	execution.client.err = errExpiredCertificate
-	execution.cfg.Bleemeo.APIBase = server.URL
-	run(t, s, execution)
-
-	if execution.maintenanceSet == nil || !*execution.maintenanceSet {
-		t.Errorf("maintenance set = %v, want true", execution.maintenanceSet)
+	// The error of the Bleemeo client for this certificate, through the transport of the
+	// synchronizer.
+	client, err := bleemeo.NewClient(
+		bleemeo.WithCredentials("user", "password"),
+		bleemeo.WithEndpoint(server.URL),
+		bleemeo.WithHTTPClient(&http.Client{Transport: gloutonTypes.NewHTTPTransport(
+			&tls.Config{RootCAs: trusted},
+			&gloutonTypes.CustomTransportOptions{UserAgentHeader: "test", RequestCounter: &atomic.Uint32{}},
+		)}),
+	)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	want := bleemeoTypes.GlobalInfo{MaintenanceEnabled: true, CurrentTime: 1700000000, MaxTimeDrift: 3600, FetchedAt: clock.now}
-	if diff := cmp.Diff(want, s.LastInfo()); diff != "" {
-		t.Errorf("LastInfo() mismatch (-want +got)\n%s", diff)
+	_, _, certificateErr := client.Do(t.Context(), http.MethodGet, "/v1/info/", nil, false, nil)
+	if certificateErr == nil {
+		t.Fatal("the Bleemeo client accepted the expired certificate")
 	}
 
-	if requestCounter.Load() != 1 {
-		t.Errorf("requests counted = %d, want 1", requestCounter.Load())
-	}
+	for _, step := range []struct {
+		name    string
+		apiBase string
+		rootCAs *x509.CertPool
+		applied bool
+	}{
+		{name: "trusted certificate", apiBase: server.URL, rootCAs: trusted, applied: true},
+		{name: "untrusted certificate", apiBase: server.URL, rootCAs: x509.NewCertPool()},
+		{name: "other host", apiBase: strings.Replace(server.URL, "127.0.0.1", "localhost", 1), rootCAs: trusted},
+		{name: "failed request", apiBase: server.URL + "?status=503", rootCAs: trusted},
+	} {
+		clock := newTestClock()
+		s := newEntity(clock)
+		s.rootCAs = step.rootCAs
 
-	// A failed retry applies nothing.
-	status = http.StatusServiceUnavailable
-	clock.now = clock.now.Add(time.Hour)
+		execution := newFakeExecution(bleemeoTypes.GlobalInfo{})
+		execution.client.err = certificateErr
+		execution.cfg.Bleemeo.APIBase = step.apiBase
+		run(t, s, execution)
 
-	execution = newFakeExecution(bleemeoTypes.GlobalInfo{})
-	execution.client.err = errExpiredCertificate
-	execution.cfg.Bleemeo.APIBase = server.URL
-	run(t, s, execution)
+		if !step.applied {
+			if execution.maintenanceSet != nil {
+				t.Errorf("%s: maintenance set to %v, want nothing applied", step.name, *execution.maintenanceSet)
+			}
 
-	if execution.maintenanceSet != nil {
-		t.Errorf("maintenance set to %v when the retry failed", *execution.maintenanceSet)
-	}
+			if !s.LastInfo().FetchedAt.IsZero() {
+				t.Errorf("%s: LastInfo() = %v, want nothing applied", step.name, s.LastInfo())
+			}
 
-	if got := s.LastInfo().FetchedAt; !got.Equal(want.FetchedAt) {
-		t.Errorf("LastInfo().FetchedAt = %v, want %v (unchanged)", got, want.FetchedAt)
+			continue
+		}
+
+		checkMaintenanceSet(t, step.name, execution)
+
+		want := bleemeoTypes.GlobalInfo{MaintenanceEnabled: true, CurrentTime: 1700000000, MaxTimeDrift: 3600, FetchedAt: clock.now}
+		if diff := cmp.Diff(want, s.LastInfo()); diff != "" {
+			t.Errorf("%s: LastInfo() mismatch (-want +got)\n%s", step.name, diff)
+		}
+
+		if got := s.requestCounter.Load(); got != 1 {
+			t.Errorf("%s: requests counted = %d, want 1", step.name, got)
+		}
 	}
 }
 
 // TestTimeDriftNewAgent checks a new agent with a large time drift marks agent_status once it
-// is registered: before, there is no agent_status to mark.
+// is registered: before, there is no agent_status to mark, and the connector stays enabled so
+// that the agent can register it.
 func TestTimeDriftNewAgent(t *testing.T) {
 	t.Parallel()
 
-	clock := &fakeClock{now: time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)}
+	clock := newTestClock()
 	s := newEntity(clock)
 	drifting := bleemeoTypes.GlobalInfo{
 		CurrentTime:  float64(clock.now.Add(-time.Hour).Unix()),
 		MaxTimeDrift: 60,
 	}
-	wantMark := []agentStatusUpdatePayload{{
-		CurrentStatus:     bleemeo.Status_Critical,
-		StatusDescription: []string{"Agent local time too different from actual time"},
-	}}
 
 	execution := newFakeExecution(drifting)
+	execution.agentID = ""
 	execution.cache.SetMetrics(nil)
+	run(t, s, execution)
 
-	if err := s.SyncBeforeFirstExecution(t.Context(), execution, false); err != nil {
-		t.Fatal(err)
+	if len(execution.disabled) != 0 {
+		t.Errorf("disabled = %v, want not disabled before the registration", execution.disabled)
 	}
 
 	for _, step := range []struct {
@@ -529,10 +633,10 @@ func TestTimeDriftNewAgent(t *testing.T) {
 		timeOffset time.Duration
 		want       []agentStatusUpdatePayload
 	}{
-		{name: "registered", timeOffset: -time.Hour, want: wantMark},
+		{name: "registered", timeOffset: -time.Hour, want: timeDriftMark()},
 		{name: "still drifting", timeOffset: -time.Hour},
 		{name: "time fixed"},
-		{name: "drifting again", timeOffset: -time.Hour, want: wantMark},
+		{name: "drifting again", timeOffset: -time.Hour, want: timeDriftMark()},
 	} {
 		globalInfo := drifting
 		globalInfo.CurrentTime = float64(clock.now.Add(step.timeOffset).Unix())
@@ -547,12 +651,17 @@ func TestTimeDriftNewAgent(t *testing.T) {
 }
 
 // TestMQTTStatusRetried checks the MQTT check is done again on the next synchronization of info
-// until agent_status tells it.
+// until agent_status is marked, and waits for agent_status to be registered. A failed update of
+// agent_status doesn't stop the rest of info.
 func TestMQTTStatusRetried(t *testing.T) {
 	t.Parallel()
 
-	s := newEntity(&fakeClock{now: time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)})
+	clock := newTestClock()
+	s := newEntity(clock)
+	dials := 0
 	s.dial = func(context.Context, string, string) (net.Conn, error) {
+		dials++
+
 		return nil, errConnectionRefused
 	}
 
@@ -564,40 +673,74 @@ func TestMQTTStatusRetried(t *testing.T) {
 		name       string
 		registered bool
 		failUpdate bool
+		wantDials  int
 		wantMarks  int
 	}{
 		{name: "agent_status not registered"},
-		{name: "update failed", registered: true, failUpdate: true},
-		{name: "marked", registered: true, wantMarks: 1},
+		{name: "update failed", registered: true, failUpdate: true, wantDials: 1},
+		{name: "marked", registered: true, wantDials: 1, wantMarks: 1},
 		{name: "already marked", registered: true},
 	} {
-		execution := newFakeExecution(bleemeoTypes.GlobalInfo{})
+		clock.now = clock.now.Add(time.Minute)
+		dials = 0
+
+		execution := newFakeExecution(bleemeoTypes.GlobalInfo{MaintenanceEnabled: true})
 		if !step.registered {
 			execution.cache.SetMetrics(nil)
 		}
 
-		execution.client.updateErr = nil
 		if step.failUpdate {
 			execution.client.updateErr = errAPIDown
 		}
 
-		e, err := s.PrepareExecution(t.Context(), execution)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if err := e.RefreshCache(t.Context(), types.SyncTypeNormal); err != nil {
-			t.Fatal(err)
-		}
-
-		err = e.SyncRemoteAndLocal(t.Context(), types.SyncTypeNormal)
-		if (err != nil) != step.failUpdate {
+		if err := runWithError(t, s, execution); (err != nil) != step.failUpdate {
 			t.Errorf("%s: SyncRemoteAndLocal() error = %v", step.name, err)
+		}
+
+		if dials != step.wantDials {
+			t.Errorf("%s: %d MQTT checks, want %d", step.name, dials, step.wantDials)
 		}
 
 		if len(execution.client.statusUpdates) != step.wantMarks {
 			t.Errorf("%s: %d agent_status updates, want %d", step.name, len(execution.client.statusUpdates), step.wantMarks)
 		}
+
+		checkMaintenanceSet(t, step.name, execution)
+
+		if got := s.LastInfo().FetchedAt; !got.Equal(clock.now) {
+			t.Errorf("%s: LastInfo().FetchedAt = %v, want %v", step.name, got, clock.now)
+		}
+	}
+}
+
+// TestMQTTDisconnectedDuringCheck checks a disconnection reported while MQTT is being checked
+// gets its own check.
+func TestMQTTDisconnectedDuringCheck(t *testing.T) {
+	t.Parallel()
+
+	s := newEntity(newTestClock())
+	s.SetMQTTConnected(false)
+
+	// MQTT reconnects and gets disconnected again while the first check runs, which finds it
+	// reachable.
+	s.dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+		s.SetMQTTConnected(true)
+		s.SetMQTTConnected(false)
+
+		return dialReachable(ctx, network, address)
+	}
+
+	run(t, s, newFakeExecution(bleemeoTypes.GlobalInfo{}))
+
+	s.dial = func(context.Context, string, string) (net.Conn, error) {
+		return nil, errConnectionRefused
+	}
+
+	execution := newFakeExecution(bleemeoTypes.GlobalInfo{})
+	run(t, s, execution)
+
+	if len(execution.client.statusUpdates) != 1 {
+		t.Errorf("%d agent_status updates after the second disconnection, want 1", len(execution.client.statusUpdates))
 	}
 }
 
@@ -605,13 +748,11 @@ func TestMQTTStatusRetried(t *testing.T) {
 func TestApplyWithoutState(t *testing.T) {
 	t.Parallel()
 
-	s := newEntity(&fakeClock{now: time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)})
+	s := newEntity(newTestClock())
 
 	execution := newFakeExecution(bleemeoTypes.GlobalInfo{MaintenanceEnabled: true})
 	execution.noState = true
 	run(t, s, execution)
 
-	if execution.maintenanceSet == nil || !*execution.maintenanceSet {
-		t.Errorf("maintenance set = %v, want true", execution.maintenanceSet)
-	}
+	checkMaintenanceSet(t, "without State", execution)
 }

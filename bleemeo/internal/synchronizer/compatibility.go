@@ -36,10 +36,9 @@ type synchronizerState struct {
 }
 
 type CompatibilityWrapper struct {
-	name              types.EntityName
-	skipOnlyEssential bool
-	method            func(context.Context, types.SyncType, types.SynchronizationExecution) (updateThresholds bool, err error)
-	state             *synchronizerState
+	name   types.EntityName
+	method func(context.Context, types.SyncType, types.SynchronizationExecution) (updateThresholds bool, err error)
+	state  *synchronizerState
 }
 
 type CompatibilityWrapperExecution struct {

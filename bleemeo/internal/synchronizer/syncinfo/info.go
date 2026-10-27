@@ -23,6 +23,7 @@ package syncinfo
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,7 +31,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -61,7 +61,11 @@ const (
 	agentStatusUpdateFields = "current_status,status_descriptions"
 )
 
-var errUnexpectedStatus = errors.New("unexpected response")
+var (
+	errUnexpectedStatus = errors.New("unexpected response")
+	errNoCertificate    = errors.New("no certificate")
+	errNoCommonValidity = errors.New("the certificates are never valid at the same time")
+)
 
 type agentStatusUpdatePayload struct {
 	CurrentStatus     bleemeo.Status `json:"current_status"`
@@ -74,16 +78,19 @@ type SyncInfo struct {
 	// requestCounter is the synchronizer's request counter, given to the client used when the
 	// certificate looks expired.
 	requestCounter *atomic.Uint32
-	dial           func(ctx context.Context, network, address string) (net.Conn, error)
+	// rootCAs verifies the certificate of the API when it looks expired. nil uses the system
+	// roots.
+	rootCAs *x509.CertPool
+	dial    func(ctx context.Context, network, address string) (net.Conn, error)
 
 	l sync.Mutex
 	// lastInfo is the global information last applied.
 	lastInfo bleemeoTypes.GlobalInfo
-	// isMQTTConnected is nil until the MQTT connection state is known.
-	isMQTTConnected *bool
-	// shouldUpdateMQTTStatus is set when MQTT got disconnected. While it is set, info checks
-	// whether MQTT is reachable. It is cleared once MQTT is connected or reachable, or
-	// agent_status is marked critical.
+	// mqttDisconnected is whether MQTT was last reported disconnected.
+	mqttDisconnected bool
+	// shouldUpdateMQTTStatus is set when MQTT got disconnected. While it is set, each
+	// synchronization of info checks whether MQTT is reachable, once agent_status is registered.
+	// It is cleared once MQTT is connected or reachable, or agent_status is marked critical.
 	shouldUpdateMQTTStatus bool
 	// timeDriftMarked is set once agent_status is marked critical for the time drift, and
 	// cleared when the time drift isn't too large anymore.
@@ -118,10 +125,16 @@ func (s *SyncInfo) EnabledInSuspendedMode() bool {
 	return false
 }
 
-// NeedSynchronizationWhileSkipped returns true: the maintenance is polled in suspended mode too,
-// so that info runs as soon as the suspension ends.
-func (s *SyncInfo) NeedSynchronizationWhileSkipped() bool {
-	return true
+// NeedSynchronizationWhileSkipped polls the maintenance like NeedSynchronization: the
+// maintenance is polled in suspended mode too, so that info runs as soon as the suspension ends.
+func (s *SyncInfo) NeedSynchronizationWhileSkipped(_ context.Context, execution types.SynchronizationExecution) bool {
+	return s.needMaintenancePoll(execution)
+}
+
+// NeedSynchronizationWithOthers returns whether info is outdated: it is then synchronized when
+// the execution synchronizes other entities.
+func (s *SyncInfo) NeedSynchronizationWithOthers() bool {
+	return s.isOutdated()
 }
 
 func (s *SyncInfo) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
@@ -139,10 +152,10 @@ func (s *SyncInfo) LastInfo() bleemeoTypes.GlobalInfo {
 	return s.lastInfo
 }
 
-// IsOutdated returns whether the global information should be fetched again, when the
+// isOutdated returns whether the global information should be fetched again, when the
 // synchronizer runs anyway. Keeping it recent detects a change on /v1/info/ quickly, and keeps
 // the time_drift metric recent enough to avoid its deactivation.
-func (s *SyncInfo) IsOutdated() bool {
+func (s *SyncInfo) isOutdated() bool {
 	s.l.Lock()
 	fetchedAt := s.lastInfo.FetchedAt
 	s.l.Unlock()
@@ -152,32 +165,22 @@ func (s *SyncInfo) IsOutdated() bool {
 
 // SetMQTTConnected records whether MQTT is connected. It returns true when MQTT is reported
 // disconnected while it was connected or not reported yet: info should then be synchronized, to
-// check whether MQTT is reachable.
+// check whether MQTT is reachable. Reporting MQTT connected ends that check.
 func (s *SyncInfo) SetMQTTConnected(isConnected bool) bool {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	justDisconnected := (s.isMQTTConnected == nil || *s.isMQTTConnected) && !isConnected
-	s.isMQTTConnected = &isConnected
+	justDisconnected := !s.mqttDisconnected && !isConnected
+	s.mqttDisconnected = !isConnected
 
-	if justDisconnected {
+	switch {
+	case isConnected:
+		s.shouldUpdateMQTTStatus = false
+	case justDisconnected:
 		s.shouldUpdateMQTTStatus = true
 	}
 
 	return justDisconnected
-}
-
-// SyncBeforeFirstExecution fetches and applies the global information outside the
-// synchronization loop: the MQTT connection depends on the maintenance and on the agent
-// version. When disableOnTimeDrift is false, a large time drift doesn't disable the connector:
-// a new agent can then register its agent_status, which the next synchronization of info marks.
-func (s *SyncInfo) SyncBeforeFirstExecution(ctx context.Context, execution types.SynchronizationExecution, disableOnTimeDrift bool) error {
-	globalInfo, ok := s.fetch(ctx, execution)
-	if !ok {
-		return nil
-	}
-
-	return s.apply(ctx, execution, globalInfo, disableOnTimeDrift)
 }
 
 func (s *SyncInfo) DiagnosticArchive(_ context.Context, archive gloutonTypes.ArchiveWriter) error {
@@ -193,14 +196,14 @@ func (s *SyncInfo) DiagnosticArchive(_ context.Context, archive gloutonTypes.Arc
 		LastInfo               bleemeoTypes.GlobalInfo
 		LastInfoFetchedAt      time.Time
 		LastMaintenanceSync    time.Time
-		IsMQTTConnected        *bool
+		MQTTDisconnected       bool
 		ShouldUpdateMQTTStatus bool
 		TimeDriftMarked        bool
 	}{
 		LastInfo:               s.lastInfo,
 		LastInfoFetchedAt:      s.lastInfo.FetchedAt,
 		LastMaintenanceSync:    s.lastMaintenanceSync,
-		IsMQTTConnected:        s.isMQTTConnected,
+		MQTTDisconnected:       s.mqttDisconnected,
 		ShouldUpdateMQTTStatus: s.shouldUpdateMQTTStatus,
 		TimeDriftMarked:        s.timeDriftMarked,
 	}
@@ -221,24 +224,10 @@ type syncInfoExecution struct {
 }
 
 // NeedSynchronization polls the maintenance mode while MQTT can't tell when it ends.
-// Otherwise, info is synchronized on request, and on full synchronizations.
+// Otherwise, info is synchronized on request, on full synchronizations, and with other entities
+// when it is outdated.
 func (e *syncInfoExecution) NeedSynchronization(_ context.Context) (bool, error) {
-	if !e.execution.GlobalState().IsMaintenance() || e.execution.Option().IsMqttConnected() {
-		return false, nil
-	}
-
-	startedAt := e.execution.StartedAt()
-
-	e.parent.l.Lock()
-	defer e.parent.l.Unlock()
-
-	if !startedAt.After(e.parent.lastMaintenanceSync.Add(maintenancePollInterval)) {
-		return false, nil
-	}
-
-	e.parent.lastMaintenanceSync = startedAt
-
-	return true, nil
+	return e.parent.needMaintenancePoll(e.execution), nil
 }
 
 func (e *syncInfoExecution) RefreshCache(ctx context.Context, _ types.SyncType) error {
@@ -252,20 +241,44 @@ func (e *syncInfoExecution) SyncRemoteAndLocal(ctx context.Context, _ types.Sync
 		return nil
 	}
 
-	return e.parent.apply(ctx, e.execution, e.globalInfo, true)
+	return e.parent.apply(ctx, e.execution, e.globalInfo)
 }
 
 func (e *syncInfoExecution) FinishExecution(_ context.Context) {
+}
+
+// needMaintenancePoll returns whether the maintenance should be polled: while in maintenance
+// and MQTT isn't connected, every 15 minutes. It records the poll.
+func (s *SyncInfo) needMaintenancePoll(execution types.SynchronizationExecution) bool {
+	if !execution.GlobalState().IsMaintenance() || execution.Option().IsMqttConnected() {
+		return false
+	}
+
+	startedAt := execution.StartedAt()
+
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	if !startedAt.After(s.lastMaintenanceSync.Add(maintenancePollInterval)) {
+		return false
+	}
+
+	s.lastMaintenanceSync = startedAt
+
+	return true
 }
 
 // fetch returns the global information. It returns false when it couldn't be fetched: the
 // failure is only logged, the information will be fetched again later.
 func (s *SyncInfo) fetch(ctx context.Context, execution types.SynchronizationExecution) (bleemeoTypes.GlobalInfo, bool) {
 	globalInfo, err := execution.BleemeoAPIClient().GetGlobalInfo(ctx)
-	if err != nil && strings.Contains(err.Error(), "certificate has expired") {
-		// A valid certificate looks expired when the local time is far off. The request is
-		// unauthenticated, so it is sent again without checking the certificate.
-		globalInfo, err = fetchGlobalInfoInsecure(ctx, execution.Option().Config.Bleemeo.APIBase, s.requestCounter)
+
+	var certificateErr x509.CertificateInvalidError
+	if errors.As(err, &certificateErr) && certificateErr.Reason == x509.Expired {
+		// A valid certificate looks expired, or not yet valid, when the local time is far off.
+		// The request is unauthenticated, so it is sent again, checking the certificate at a
+		// time when it is valid.
+		globalInfo, err = fetchGlobalInfoIgnoringTime(ctx, execution.Option().Config.Bleemeo.APIBase, s.rootCAs, s.requestCounter)
 	}
 
 	if err != nil {
@@ -279,22 +292,34 @@ func (s *SyncInfo) fetch(ctx context.Context, execution types.SynchronizationExe
 	return globalInfo, true
 }
 
-// fetchGlobalInfoInsecure returns the global information of the API at apiBase, without
-// checking its certificate. requestCounter counts the request.
-func fetchGlobalInfoInsecure(ctx context.Context, apiBase string, requestCounter *atomic.Uint32) (bleemeoTypes.GlobalInfo, error) {
+// fetchGlobalInfoIgnoringTime returns the global information of the API at apiBase. The
+// certificate of the API is verified at a time when it is valid, not at the local time.
+// rootCAs, when not nil, replaces the system roots. requestCounter counts the request.
+func fetchGlobalInfoIgnoringTime(ctx context.Context, apiBase string, rootCAs *x509.CertPool, requestCounter *atomic.Uint32) (bleemeoTypes.GlobalInfo, error) {
+	baseURL, err := url.Parse(apiBase)
+	if err != nil {
+		return bleemeoTypes.GlobalInfo{}, err
+	}
+
+	infoURL := baseURL.JoinPath("/v1/info/").String()
+	hostname := baseURL.Hostname()
+
 	transportOpts := &gloutonTypes.CustomTransportOptions{
 		UserAgentHeader: version.UserAgent(),
 		RequestCounter:  requestCounter,
 		EnableLogger:    true,
 	}
-
-	// A plain HTTP client: the Bleemeo client can't be created without credentials.
-	client := &http.Client{Transport: gloutonTypes.NewHTTPTransport(&tls.Config{InsecureSkipVerify: true}, transportOpts)} //nolint:gosec
-
-	infoURL, err := url.JoinPath(apiBase, "/v1/info/")
-	if err != nil {
-		return bleemeoTypes.GlobalInfo{}, err
+	tlsConfig := &tls.Config{
+		// The default verification uses the local time: VerifyConnection verifies the
+		// certificate instead.
+		InsecureSkipVerify: true, //nolint:gosec
+		VerifyConnection: func(state tls.ConnectionState) error {
+			return verifyIgnoringTime(state.PeerCertificates, hostname, rootCAs)
+		},
 	}
+	// A plain HTTP client: the Bleemeo client can't be created without credentials.
+	client := &http.Client{Transport: gloutonTypes.NewHTTPTransport(tlsConfig, transportOpts)}
+	defer client.CloseIdleConnections()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, infoURL, nil)
 	if err != nil {
@@ -321,10 +346,50 @@ func fetchGlobalInfoInsecure(ctx context.Context, apiBase string, requestCounter
 	return globalInfo, nil
 }
 
+// verifyIgnoringTime verifies the certificate chain sent by the server for hostname, at a time
+// when all the certificates of the chain are valid. rootCAs, when not nil, replaces the system
+// roots.
+func verifyIgnoringTime(certificates []*x509.Certificate, hostname string, rootCAs *x509.CertPool) error {
+	if len(certificates) == 0 {
+		return errNoCertificate
+	}
+
+	leaf := certificates[0]
+	notBefore, notAfter := leaf.NotBefore, leaf.NotAfter
+	intermediates := x509.NewCertPool()
+
+	for _, cert := range certificates[1:] {
+		intermediates.AddCert(cert)
+
+		if cert.NotBefore.After(notBefore) {
+			notBefore = cert.NotBefore
+		}
+
+		if cert.NotAfter.Before(notAfter) {
+			notAfter = cert.NotAfter
+		}
+	}
+
+	if notAfter.Before(notBefore) {
+		return errNoCommonValidity
+	}
+
+	_, err := leaf.Verify(x509.VerifyOptions{
+		DNSName:       hostname,
+		Intermediates: intermediates,
+		Roots:         rootCAs,
+		CurrentTime:   notBefore.Add(notAfter.Sub(notBefore) / 2),
+	})
+
+	return err
+}
+
 // apply disables the connector when the agent is too old or its time too far off, checks
 // whether MQTT is reachable, sets the maintenance mode, pushes the time_drift metric and marks
-// agent_status critical for the time drift.
-func (s *SyncInfo) apply(ctx context.Context, execution types.SynchronizationExecution, globalInfo bleemeoTypes.GlobalInfo, disableOnTimeDrift bool) error {
+// agent_status critical for the time drift. A failed update of agent_status doesn't stop the
+// rest: its error is returned at the end, and the update is done again on the next
+// synchronization of info.
+func (s *SyncInfo) apply(ctx context.Context, execution types.SynchronizationExecution, globalInfo bleemeoTypes.GlobalInfo) error {
 	option := execution.Option()
 	apiClient := execution.BleemeoAPIClient()
 
@@ -341,9 +406,7 @@ func (s *SyncInfo) apply(ctx context.Context, execution types.SynchronizationExe
 		execution.RequestSynchronization(types.EntityInfo, true)
 	}
 
-	if err := s.updateMQTTStatus(ctx, apiClient, option.Cache, agentID, option.Config.Bleemeo.MQTT); err != nil {
-		return err
-	}
+	mqttErr := s.updateMQTTStatus(ctx, apiClient, option.Cache, agentID, option.Config.Bleemeo.MQTT)
 
 	if option.SetBleemeoInMaintenanceMode != nil {
 		option.SetBleemeoInMaintenanceMode(ctx, globalInfo.MaintenanceEnabled)
@@ -352,7 +415,9 @@ func (s *SyncInfo) apply(ctx context.Context, execution types.SynchronizationExe
 	if globalInfo.CurrentTime != 0 {
 		pushTimeDrift(option.PushAppender, globalInfo)
 
-		if disableOnTimeDrift && globalInfo.IsTimeDriftTooLarge() {
+		// Until the agent is registered, a large time drift doesn't disable the connector: the
+		// agent registers its agent_status first, which info then marks.
+		if agentID != "" && globalInfo.IsTimeDriftTooLarge() {
 			option.DisableCallback(bleemeoTypes.DisableTimeDrift, s.now().Add(delay.JitterDelay(30*time.Minute, 0.1)))
 
 			// Check the time again on the next execution, once the connector is enabled again.
@@ -360,15 +425,13 @@ func (s *SyncInfo) apply(ctx context.Context, execution types.SynchronizationExe
 		}
 	}
 
-	if err := s.updateTimeDriftStatus(ctx, apiClient, option.Cache, agentID, globalInfo.IsTimeDriftTooLarge()); err != nil {
-		return err
-	}
+	timeDriftErr := s.updateTimeDriftStatus(ctx, apiClient, option.Cache, agentID, globalInfo.IsTimeDriftTooLarge())
 
 	s.l.Lock()
 	s.lastInfo = globalInfo
 	s.l.Unlock()
 
-	return nil
+	return errors.Join(mqttErr, timeDriftErr)
 }
 
 // updateTimeDriftStatus marks agent_status as critical once while the time drift is too large.
@@ -387,13 +450,17 @@ func (s *SyncInfo) updateTimeDriftStatus(ctx context.Context, apiClient types.Me
 		return nil
 	}
 
-	marked, err := markAgentStatusCritical(ctx, apiClient, c, agentID, "Agent local time too different from actual time")
-	if err != nil {
+	metricID, ok := agentStatusID(c, agentID)
+	if !ok {
+		return nil
+	}
+
+	if err := markAgentStatusCritical(ctx, apiClient, metricID, "Agent local time too different from actual time"); err != nil {
 		return err
 	}
 
 	s.l.Lock()
-	s.timeDriftMarked = marked
+	s.timeDriftMarked = true
 	s.l.Unlock()
 
 	return nil
@@ -403,15 +470,20 @@ func (s *SyncInfo) updateTimeDriftStatus(ctx context.Context, apiClient types.Me
 // isn't reachable.
 func (s *SyncInfo) updateMQTTStatus(ctx context.Context, apiClient types.MetricClient, c *cache.Cache, agentID string, mqttConfig config.BleemeoMQTT) error {
 	s.l.Lock()
-	isMQTTConnected := s.isMQTTConnected != nil && *s.isMQTTConnected
 	shouldUpdate := s.shouldUpdateMQTTStatus
-
-	if isMQTTConnected {
-		s.shouldUpdateMQTTStatus = false
-	}
+	s.shouldUpdateMQTTStatus = false
 	s.l.Unlock()
 
-	if !shouldUpdate || isMQTTConnected {
+	if !shouldUpdate {
+		return nil
+	}
+
+	// MQTT isn't ready until agent_status is registered, and there is nothing to mark: the check
+	// waits for agent_status.
+	metricID, ok := agentStatusID(c, agentID)
+	if !ok {
+		s.checkMQTTAgain()
+
 		return nil
 	}
 
@@ -427,10 +499,6 @@ func (s *SyncInfo) updateMQTTStatus(ctx context.Context, apiClient types.MetricC
 
 	if dialErr == nil {
 		// The agent can access MQTT, nothing to do.
-		s.l.Lock()
-		s.shouldUpdateMQTTStatus = false
-		s.l.Unlock()
-
 		return nil
 	}
 
@@ -438,16 +506,25 @@ func (s *SyncInfo) updateMQTTStatus(ctx context.Context, apiClient types.MetricC
 
 	logger.Printf(msg)
 
-	// Until agent_status is marked, each synchronization of info checks MQTT again: agent_status
-	// may not be registered yet, or the update may fail.
-	marked, err := markAgentStatusCritical(ctx, apiClient, c, agentID, msg)
-	if marked {
-		s.l.Lock()
-		s.shouldUpdateMQTTStatus = false
-		s.l.Unlock()
+	if err := markAgentStatusCritical(ctx, apiClient, metricID, msg); err != nil {
+		s.checkMQTTAgain()
+
+		return err
 	}
 
-	return err
+	return nil
+}
+
+// checkMQTTAgain sets shouldUpdateMQTTStatus again when agent_status couldn't be marked,
+// because it isn't registered yet or its update failed: the next synchronization of info checks
+// MQTT again, unless MQTT is connected by then.
+func (s *SyncInfo) checkMQTTAgain() {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	if s.mqttDisconnected {
+		s.shouldUpdateMQTTStatus = true
+	}
 }
 
 // pushTimeDrift writes the time_drift metric: the difference between the local time and the
@@ -471,26 +548,25 @@ func pushTimeDrift(appender *model.BufferAppender, globalInfo bleemeoTypes.Globa
 	}
 }
 
-// markAgentStatusCritical sets the agent_status of the agent agentID to critical, with the
-// given description. It returns false when agent_status isn't registered yet.
-func markAgentStatusCritical(ctx context.Context, apiClient types.MetricClient, c *cache.Cache, agentID string, description string) (bool, error) {
+// agentStatusID returns the ID of the agent_status of the agent agentID. It returns false when
+// agent_status isn't registered yet.
+func agentStatusID(c *cache.Cache, agentID string) (string, bool) {
 	metricKey := gloutonTypes.LabelsToText(
 		map[string]string{gloutonTypes.LabelName: types.AgentStatusName, gloutonTypes.LabelInstanceUUID: agentID},
 	)
 
 	metric, ok := c.MetricLookupFromList()[metricKey]
-	if !ok {
-		return false, nil
-	}
 
+	return metric.ID, ok
+}
+
+// markAgentStatusCritical sets the agent_status metricID to critical, with the given
+// description.
+func markAgentStatusCritical(ctx context.Context, apiClient types.MetricClient, metricID string, description string) error {
 	payload := agentStatusUpdatePayload{
 		CurrentStatus:     bleemeo.Status_Critical,
 		StatusDescription: []string{description},
 	}
 
-	if err := apiClient.UpdateMetric(ctx, metric.ID, payload, agentStatusUpdateFields); err != nil {
-		return false, err
-	}
-
-	return true, nil
+	return apiClient.UpdateMetric(ctx, metricID, payload, agentStatusUpdateFields)
 }

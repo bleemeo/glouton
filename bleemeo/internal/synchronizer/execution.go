@@ -321,11 +321,8 @@ func (e *Execution) run(ctx context.Context) error {
 
 		e.applyNeedSynchronization(ctx)
 
-		// Info is synchronized when the execution has work anyway and info is outdated. Info
-		// can't declare this in its NeedSynchronization: it depends on whether other entities
-		// run.
-		if e.hadWork() && e.synchronizer.info.IsOutdated() {
-			e.RequestSynchronization(types.EntityInfo, false)
+		if e.hadWork() {
+			e.applyNeedSynchronizationWithOthers()
 		}
 	}
 
@@ -483,25 +480,25 @@ func (e *Execution) applyNeedSynchronization(ctx context.Context) {
 		}
 	})
 
+	// The skipped entities keep errSkippedExecution: what they need is requested again at the
+	// end of the execution.
 	for idx := range e.entities {
 		ee := &e.entities[idx]
 
 		entity, ok := ee.entity.(types.NeedSynchronizationWhileSkipped)
-		if !ok || !entity.NeedSynchronizationWhileSkipped() || !errors.Is(ee.err, errSkippedExecution) {
-			continue
-		}
-
-		if ee.synchronizer == nil {
-			synchronizer, err := ee.entity.PrepareExecution(ctx, e)
-			if err != nil {
-				continue
-			}
-
-			ee.synchronizer = synchronizer
-		}
-
-		if need, err := ee.synchronizer.NeedSynchronization(ctx); err == nil && need && ee.syncType == types.SyncTypeNone {
+		if ok && errors.Is(ee.err, errSkippedExecution) && entity.NeedSynchronizationWhileSkipped(ctx, e) && ee.syncType == types.SyncTypeNone {
 			ee.syncType = types.SyncTypeNormal
+		}
+	}
+}
+
+// applyNeedSynchronizationWithOthers requests the entities that need a synchronization when the
+// execution synchronizes other entities.
+func (e *Execution) applyNeedSynchronizationWithOthers() {
+	for _, ee := range e.entities {
+		entity, ok := ee.entity.(types.NeedSynchronizationWithOthers)
+		if ok && ee.syncType == types.SyncTypeNone && entity.NeedSynchronizationWithOthers() {
+			e.RequestSynchronization(ee.entity.Name(), false)
 		}
 	}
 }

@@ -204,7 +204,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		s.vsphere,
 		syncapplications.New(),
 		syncservices.New(),
-		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
+		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors},
 		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},
 		syncregistrationstatus.New(option, s.metricsState, s.now),
 		syncgloutonconfig.New(option.ConfigItems),
@@ -335,21 +335,14 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 
 // syncInfoBeforeFirstExecution syncs info before the synchronization loop, because the MQTT
 // connection depends on it (maintenance and agent too old).
-// Info also disables the connector when the time drift is too large, except for a new agent: it
-// registers its agent_status first, so that info marks it with the time drift.
 // The execution is scoped to this function: it must not be reused by the synchronization loop,
 // which has its own execution per run.
-func (s *Synchronizer) syncInfoBeforeFirstExecution(ctx context.Context, firstSync bool) {
-	exec := s.newLimitedExecution(false, nil)
-	// The execution runs no synchronization list: what info requests, like a synchronization of
-	// itself once the connector is enabled again, goes to the synchronization loop.
-	exec.syncListStarted = true
+func (s *Synchronizer) syncInfoBeforeFirstExecution(ctx context.Context) {
+	exec := s.newLimitedExecution(false, map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeNormal})
 
-	if err := s.info.SyncBeforeFirstExecution(ctx, exec, !firstSync); err != nil {
+	if err := exec.run(ctx); err != nil {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
 	}
-
-	exec.executePostRunCalls()
 }
 
 // Run runs the Synchronizer.
@@ -372,7 +365,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err)
 	}
 
-	s.syncInfoBeforeFirstExecution(ctx, firstSync)
+	s.syncInfoBeforeFirstExecution(ctx)
 
 	s.option.SetInitialized()
 

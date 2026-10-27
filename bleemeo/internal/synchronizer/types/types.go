@@ -152,12 +152,17 @@ type EntitySynchronizer interface {
 	PrepareExecution(ctx context.Context, execution SynchronizationExecution) (EntitySynchronizerExecution, error)
 }
 
-// NeedSynchronizationWhileSkipped is implemented by the entity synchronizers whose
-// NeedSynchronization is called even while they are skipped, in maintenance or suspended mode,
-// when NeedSynchronizationWhileSkipped returns true. The entity stays skipped: a synchronization
-// it needs is requested again until an execution where it can run.
+// NeedSynchronizationWhileSkipped is implemented by the entity synchronizers that may need a
+// synchronization while they are skipped, in maintenance or suspended mode. The entity stays
+// skipped: the synchronization is requested again until an execution where it can run.
 type NeedSynchronizationWhileSkipped interface {
-	NeedSynchronizationWhileSkipped() bool
+	NeedSynchronizationWhileSkipped(ctx context.Context, execution SynchronizationExecution) bool
+}
+
+// NeedSynchronizationWithOthers is implemented by the entity synchronizers that may need a
+// synchronization when the execution synchronizes other entities anyway.
+type NeedSynchronizationWithOthers interface {
+	NeedSynchronizationWithOthers() bool
 }
 
 // DiagnosticArchiver is implemented by the entity synchronizers that add their state to the
