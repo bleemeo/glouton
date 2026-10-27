@@ -482,12 +482,7 @@ func TestMQTTStatus(t *testing.T) {
 func expiredCertificate(t *testing.T) tls.Certificate {
 	t.Helper()
 
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	template := &x509.Certificate{
+	leaf, key := newCertificate(t, &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
 		Subject:               pkix.Name{CommonName: "api"},
 		NotBefore:             time.Now().Add(-48 * time.Hour),
@@ -497,19 +492,36 @@ func expiredCertificate(t *testing.T) tls.Certificate {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		IsCA:                  true,
-	}
+	}, nil, nil)
 
-	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	return tls.Certificate{Certificate: [][]byte{leaf.Raw}, PrivateKey: key, Leaf: leaf}
+}
+
+// newCertificate returns a certificate for template, signed by parent and parentKey, or
+// self-signed when parent is nil.
+func newCertificate(t *testing.T, template *x509.Certificate, parent *x509.Certificate, parentKey *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	leaf, err := x509.ParseCertificate(der)
+	if parent == nil {
+		parent, parentKey = template, key
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, parent, &key.PublicKey, parentKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key, Leaf: leaf}
+	certificate, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return certificate, key
 }
 
 // TestFetchExpiredCertificate checks the global information is fetched again when the
@@ -602,6 +614,64 @@ func TestFetchExpiredCertificate(t *testing.T) {
 
 		if got := s.requestCounter.Load(); got != 1 {
 			t.Errorf("%s: requests counted = %d, want 1", step.name, got)
+		}
+	}
+}
+
+// TestVerifyIgnoringTimeChain checks a chain is verified at a time when the server's
+// certificate is valid, even when the server also sends a certificate expired by then, like a
+// stale cross-signature of its root.
+func TestVerifyIgnoringTimeChain(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	caTemplate := func(name string, notBefore, notAfter time.Time) *x509.Certificate {
+		return &x509.Certificate{
+			SerialNumber:          big.NewInt(1),
+			Subject:               pkix.Name{CommonName: name},
+			NotBefore:             notBefore,
+			NotAfter:              notAfter,
+			KeyUsage:              x509.KeyUsageCertSign,
+			BasicConstraintsValid: true,
+			IsCA:                  true,
+		}
+	}
+
+	root, rootKey := newCertificate(t, caTemplate("root", now.AddDate(-5, 0, 0), now.AddDate(10, 0, 0)), nil, nil)
+	oldRoot, oldRootKey := newCertificate(t, caTemplate("old root", now.AddDate(-20, 0, 0), now.AddDate(-1, 0, 0)), nil, nil)
+	intermediate, intermediateKey := newCertificate(t, caTemplate("intermediate", now.AddDate(-4, 0, 0), now.AddDate(5, 0, 0)), root, rootKey)
+
+	// The root, signed by the old root, expired a year ago. Its key isn't used.
+	crossSigned, _ := newCertificate(t, caTemplate("root", now.AddDate(-6, 0, 0), now.AddDate(-1, 0, 0)), oldRoot, oldRootKey)
+
+	// The certificate of the server looks expired at the local time.
+	leaf, _ := newCertificate(t, &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "api"},
+		DNSNames:     []string{"api.example.com"},
+		NotBefore:    now.AddDate(0, 0, -100),
+		NotAfter:     now.AddDate(0, 0, -10),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}, intermediate, intermediateKey)
+
+	trusted := x509.NewCertPool()
+	trusted.AddCert(root)
+
+	for _, step := range []struct {
+		name    string
+		chain   []*x509.Certificate
+		rootCAs *x509.CertPool
+		wantErr bool
+	}{
+		{name: "chain", chain: []*x509.Certificate{leaf, intermediate}, rootCAs: trusted},
+		{name: "stale cross-signature", chain: []*x509.Certificate{leaf, intermediate, crossSigned}, rootCAs: trusted},
+		{name: "untrusted root", chain: []*x509.Certificate{leaf, intermediate, crossSigned}, rootCAs: x509.NewCertPool(), wantErr: true},
+		{name: "missing intermediate", chain: []*x509.Certificate{leaf}, rootCAs: trusted, wantErr: true},
+	} {
+		err := verifyIgnoringTime(step.chain, "api.example.com", step.rootCAs)
+		if (err != nil) != step.wantErr {
+			t.Errorf("%s: verifyIgnoringTime() = %v, want error %v", step.name, err, step.wantErr)
 		}
 	}
 }

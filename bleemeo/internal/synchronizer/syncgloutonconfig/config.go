@@ -96,8 +96,8 @@ type syncGloutonConfigExecution struct {
 	remote  map[comparableConfigItem]configItemValue
 }
 
-// NeedSynchronization requests a full synchronization until the config items were synchronized
-// once. They are only synchronized on full synchronizations.
+// NeedSynchronization requests its own full synchronization until the config items were
+// synchronized once. They are only synchronized on full synchronizations.
 func (e *syncGloutonConfigExecution) NeedSynchronization(_ context.Context) (bool, error) {
 	if !e.parent.syncDone {
 		e.execution.RequestSynchronization(types.EntityGloutonConfig, true)

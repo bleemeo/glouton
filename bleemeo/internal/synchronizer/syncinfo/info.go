@@ -64,7 +64,6 @@ const (
 var (
 	errUnexpectedStatus = errors.New("unexpected response")
 	errNoCertificate    = errors.New("no certificate")
-	errNoCommonValidity = errors.New("the certificates are never valid at the same time")
 )
 
 type agentStatusUpdatePayload struct {
@@ -125,8 +124,9 @@ func (s *SyncInfo) EnabledInSuspendedMode() bool {
 	return false
 }
 
-// NeedSynchronizationWhileSkipped polls the maintenance like NeedSynchronization: the
-// maintenance is polled in suspended mode too, so that info runs as soon as the suspension ends.
+// NeedSynchronizationWhileSkipped returns whether the maintenance should be polled, like
+// NeedSynchronization, while info is skipped in suspended mode. The poll stays requested, and
+// info runs on the first execution after the suspension.
 func (s *SyncInfo) NeedSynchronizationWhileSkipped(_ context.Context, execution types.SynchronizationExecution) bool {
 	return s.needMaintenancePoll(execution)
 }
@@ -346,8 +346,10 @@ func fetchGlobalInfoIgnoringTime(ctx context.Context, apiBase string, rootCAs *x
 	return globalInfo, nil
 }
 
-// verifyIgnoringTime verifies the certificate chain sent by the server for hostname, at a time
-// when all the certificates of the chain are valid. rootCAs, when not nil, replaces the system
+// verifyIgnoringTime verifies the certificate chain sent by the server for hostname, at the
+// middle of the validity of the server's certificate. The other certificates sent are only
+// candidate intermediates: one which isn't valid at that time, like a stale cross-signature,
+// is skipped when another path to a root exists. rootCAs, when not nil, replaces the system
 // roots.
 func verifyIgnoringTime(certificates []*x509.Certificate, hostname string, rootCAs *x509.CertPool) error {
 	if len(certificates) == 0 {
@@ -355,30 +357,17 @@ func verifyIgnoringTime(certificates []*x509.Certificate, hostname string, rootC
 	}
 
 	leaf := certificates[0]
-	notBefore, notAfter := leaf.NotBefore, leaf.NotAfter
 	intermediates := x509.NewCertPool()
 
 	for _, cert := range certificates[1:] {
 		intermediates.AddCert(cert)
-
-		if cert.NotBefore.After(notBefore) {
-			notBefore = cert.NotBefore
-		}
-
-		if cert.NotAfter.Before(notAfter) {
-			notAfter = cert.NotAfter
-		}
-	}
-
-	if notAfter.Before(notBefore) {
-		return errNoCommonValidity
 	}
 
 	_, err := leaf.Verify(x509.VerifyOptions{
 		DNSName:       hostname,
 		Intermediates: intermediates,
 		Roots:         rootCAs,
-		CurrentTime:   notBefore.Add(notAfter.Sub(notBefore) / 2),
+		CurrentTime:   leaf.NotBefore.Add(leaf.NotAfter.Sub(leaf.NotBefore) / 2),
 	})
 
 	return err

@@ -340,9 +340,8 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 func (s *Synchronizer) syncInfoBeforeFirstExecution(ctx context.Context) {
 	exec := s.newLimitedExecution(false, map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeNormal})
 
-	if err := exec.run(ctx); err != nil {
-		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
-	}
+	// run logs the failure of info.
+	_ = exec.run(ctx)
 }
 
 // Run runs the Synchronizer.

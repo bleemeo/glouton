@@ -545,7 +545,7 @@ func TestMetricSimpleSync(t *testing.T) {
 			ID:         "1",
 			AgentID:    helper.s.agentID,
 			LabelsText: "",
-			Name:       agentStatusName,
+			Name:       types.AgentStatusName,
 		},
 	}
 
@@ -574,7 +574,7 @@ func TestMetricSimpleSync(t *testing.T) {
 			ID:         "1",
 			AgentID:    idAgentMain,
 			LabelsText: "",
-			Name:       agentStatusName,
+			Name:       types.AgentStatusName,
 		},
 		{
 			ID:         "2",
@@ -629,11 +629,11 @@ func TestMetricSimpleSync(t *testing.T) {
 	}
 
 	for _, m := range metrics {
-		if m.DeactivatedAt.IsZero() && m.Name != agentStatusName {
+		if m.DeactivatedAt.IsZero() && m.Name != types.AgentStatusName {
 			t.Errorf("%v should be deactivated", m)
 
 			break
-		} else if !m.DeactivatedAt.IsZero() && m.Name == agentStatusName {
+		} else if !m.DeactivatedAt.IsZero() && m.Name == types.AgentStatusName {
 			t.Errorf("%v should not be deactivated", m)
 		}
 	}
@@ -667,7 +667,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	}
 
 	for _, m := range metrics {
-		if m.Name == agentStatusName || m.Name == metricCPUSystem || m.Name == "disk_used" {
+		if m.Name == types.AgentStatusName || m.Name == metricCPUSystem || m.Name == "disk_used" {
 			if !m.DeactivatedAt.IsZero() {
 				t.Errorf("%v should be active", m)
 			}
@@ -786,11 +786,11 @@ func TestMetricDeleted(t *testing.T) {
 	}
 
 	for _, m := range metrics {
-		if m.DeactivatedAt.IsZero() && m.Name != agentStatusName {
+		if m.DeactivatedAt.IsZero() && m.Name != types.AgentStatusName {
 			t.Errorf("%v should be deactivated", m)
 
 			break
-		} else if !m.DeactivatedAt.IsZero() && m.Name == agentStatusName {
+		} else if !m.DeactivatedAt.IsZero() && m.Name == types.AgentStatusName {
 			t.Errorf("%v should not be deactivated", m)
 		}
 	}
@@ -1498,7 +1498,7 @@ func TestWithSNMP(t *testing.T) {
 			ID:         "1",
 			AgentID:    idAgentMain,
 			LabelsText: "",
-			Name:       agentStatusName,
+			Name:       types.AgentStatusName,
 		},
 		{
 			ID:         "2",
@@ -1597,7 +1597,7 @@ func TestMonitorDeactivation(t *testing.T) {
 			ID:         "1",
 			AgentID:    idAgentMain,
 			LabelsText: "",
-			Name:       agentStatusName,
+			Name:       types.AgentStatusName,
 		},
 		bleemeoapi.MetricPayload{
 			ID:      "2",
@@ -1643,7 +1643,7 @@ func TestMonitorDeactivation(t *testing.T) {
 			ID:         "1",
 			AgentID:    idAgentMain,
 			LabelsText: "",
-			Name:       agentStatusName,
+			Name:       types.AgentStatusName,
 		},
 		{
 			ID:      "2",
@@ -1744,7 +1744,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 					ID:         "1",
 					AgentID:    testAgent.ID,
 					LabelsText: "",
-					Name:       agentStatusName,
+					Name:       types.AgentStatusName,
 				},
 				{
 					ID:         "2",
@@ -1835,7 +1835,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 					ID:         "1",
 					AgentID:    testAgent.ID,
 					LabelsText: "",
-					Name:       agentStatusName,
+					Name:       types.AgentStatusName,
 				},
 				{
 					ID:         "2",
@@ -1881,7 +1881,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 					ID:         "1",
 					AgentID:    testAgent.ID,
 					LabelsText: "",
-					Name:       agentStatusName,
+					Name:       types.AgentStatusName,
 				},
 				{
 					ID:         "2",
@@ -1974,7 +1974,7 @@ func TestMonitorPrivate(t *testing.T) {
 			ID:         idAny,
 			AgentID:    idAgentMain,
 			LabelsText: "",
-			Name:       agentStatusName,
+			Name:       types.AgentStatusName,
 		},
 		{
 			ID:      idAny,
@@ -2024,7 +2024,7 @@ func TestMonitorPrivate(t *testing.T) {
 			ID:         idAny,
 			AgentID:    idAgentMain,
 			LabelsText: "",
-			Name:       agentStatusName,
+			Name:       types.AgentStatusName,
 		},
 		{
 			ID:      idAny,
@@ -2160,7 +2160,7 @@ func TestKubernetesMetrics(t *testing.T) {
 			ID:         idAny,
 			AgentID:    idAgentMain,
 			LabelsText: "",
-			Name:       agentStatusName,
+			Name:       types.AgentStatusName,
 		},
 		{
 			ID:         idAny,

@@ -289,8 +289,8 @@ func TestCrashReportThrottle(t *testing.T) {
 	}
 }
 
-// TestEntityUploadsOnDemand runs one execution: the on-demand diagnostic is uploaded once,
-// whatever the API already had.
+// TestEntityUploadsOnDemand runs two executions: the on-demand diagnostic is uploaded by the
+// first one only, though the API doesn't list it afterwards.
 func TestEntityUploadsOnDemand(t *testing.T) {
 	t.Parallel()
 

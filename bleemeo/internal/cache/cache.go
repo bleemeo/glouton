@@ -176,13 +176,23 @@ func (c *Cache) Agent() (agent bleemeoTypes.Agent) {
 	return c.data.Agent
 }
 
-// SetAgent update the Agent object.
+// SetAgent update the Agent object, and its entry in the agent list when it has one, so that
+// both agree until the list is read again.
 func (c *Cache) SetAgent(agent bleemeoTypes.Agent) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	c.data.Agent = agent
 	c.dirty = true
+
+	idx := slices.IndexFunc(c.data.Agents, func(a bleemeoTypes.Agent) bool { return a.ID == agent.ID })
+	if idx == -1 {
+		return
+	}
+
+	// A copy: SetAgentList keeps the slice it was given, which its caller may still hold.
+	c.data.Agents = slices.Clone(c.data.Agents)
+	c.data.Agents[idx] = agent
 }
 
 // CurrentAccountConfig returns our own AccountConfig built from the Config objects.

@@ -66,7 +66,7 @@ func (vSphereVMMock) LatestError() error       { return nil }
 
 // TestAPICallsBaseline runs a scripted life of an agent and checks the API calls made, method
 // by method, and the entities synchronized at each step.
-// It guards the migration of the entities to their sub-packages: the calls must not change.
+// Any change of the calls made fails it.
 // The steps stay less than 15 minutes apart, except the full synchronization, so the periodic
 // duplicated agent check, jittered between 15 and 25 minutes, always runs at the same steps.
 func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a table of steps.
@@ -426,6 +426,95 @@ func TestSyncInfoBeforeFirstExecution(t *testing.T) {
 	want := map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeForceCacheRefresh}
 	if diff := cmp.Diff(want, syncTypeByEntity(helper.s.forceSync)); diff != "" {
 		t.Errorf("requested synchronizations mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// TestAPICallsBeforeFirstExecution checks the API calls of the info synchronization before the
+// synchronization loop, for a registered agent restarted with its cache. It runs every entity's
+// PrepareExecution and FinishExecution: only info must call the API, and the other entities
+// must notify nothing.
+func TestAPICallsBeforeFirstExecution(t *testing.T) {
+	t.Parallel()
+
+	for _, step := range []struct {
+		name string
+		// prepare sets the global information of the API.
+		prepare         func(info *bleemeoTypes.GlobalInfo, now time.Time)
+		wantCalls       map[string]int
+		wantMaintenance bool
+		wantDisable     bleemeoTypes.DisableReason
+	}{
+		{
+			name:      "startup",
+			wantCalls: map[string]int{"GetGlobalInfo": 1},
+		},
+		{
+			name: "startup in maintenance",
+			prepare: func(info *bleemeoTypes.GlobalInfo, _ time.Time) {
+				info.MaintenanceEnabled = true
+			},
+			wantCalls:       map[string]int{"GetGlobalInfo": 1},
+			wantMaintenance: true,
+		},
+		{
+			// The connector is disabled, and agent_status is marked critical.
+			name: "startup with a time drift",
+			prepare: func(info *bleemeoTypes.GlobalInfo, now time.Time) {
+				info.CurrentTime = float64(now.Add(-time.Hour).Unix())
+				info.MaxTimeDrift = 60
+			},
+			wantCalls:   map[string]int{"GetGlobalInfo": 1, "UpdateMetric": 1},
+			wantDisable: bleemeoTypes.DisableTimeDrift,
+		},
+	} {
+		t.Run(step.name, func(t *testing.T) {
+			t.Parallel()
+
+			helper := newHelper(t)
+			defer helper.Close()
+
+			labelsUpdates := 0
+			helper.NotifyLabelsUpdate = func() { labelsUpdates++ }
+
+			helper.preregisterAgent(t)
+			helper.initSynchronizer(t)
+
+			// A first run fills the cache, agent_status included.
+			if err := helper.runOnce(t); err != nil {
+				t.Fatal(err)
+			}
+
+			// The restart, with the cache.
+			helper.AddTime(time.Minute)
+			helper.initSynchronizer(t)
+
+			configUpdates := 0
+			helper.s.option.UpdateConfigCallback = func() { configUpdates++ }
+			labelsUpdates = 0
+
+			if step.prepare != nil {
+				step.prepare(&helper.wrapperClientMock.globalInfo, helper.Now())
+			}
+
+			helper.wrapperClientMock.resetCount()
+			helper.s.syncInfoBeforeFirstExecution(t.Context())
+
+			if diff := cmp.Diff(step.wantCalls, helper.wrapperClientMock.methodCounts, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("API calls mismatch (-want +got)\n%s", diff)
+			}
+
+			if configUpdates != 0 || labelsUpdates != 0 {
+				t.Errorf("notified %d config updates and %d labels updates, want none", configUpdates, labelsUpdates)
+			}
+
+			if got := helper.s.IsMaintenance(); got != step.wantMaintenance {
+				t.Errorf("maintenance = %v, want %v", got, step.wantMaintenance)
+			}
+
+			if _, reason := helper.s.getDisabledUntil(); reason != step.wantDisable {
+				t.Errorf("disable reason = %v, want %v", reason, step.wantDisable)
+			}
+		})
 	}
 }
 

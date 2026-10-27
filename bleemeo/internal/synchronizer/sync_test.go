@@ -135,7 +135,7 @@ func TestSync(t *testing.T) {
 		metricFromAPI(bleemeoapi.MetricPayload{
 			ID:      "1",
 			AgentID: testAgent.ID,
-			Name:    agentStatusName,
+			Name:    types.AgentStatusName,
 		}, time.Time{}),
 		metricFromAPI(bleemeoapi.MetricPayload{
 			ID:      "2",
@@ -259,7 +259,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		{
 			ID:      "1",
 			AgentID: idAgentMain,
-			Name:    agentStatusName,
+			Name:    types.AgentStatusName,
 		},
 		{
 			ID:      "2",
@@ -327,7 +327,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		{
 			ID:      "1",
 			AgentID: idAgentMain,
-			Name:    agentStatusName,
+			Name:    types.AgentStatusName,
 		},
 		{
 			ID:            "2",
@@ -455,7 +455,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		{
 			ID:      "1",
 			AgentID: idAgentMain,
-			Name:    agentStatusName,
+			Name:    types.AgentStatusName,
 		},
 		{
 			ID:      "2",
@@ -613,7 +613,7 @@ func TestContainerSync(t *testing.T) {
 			ID:         "1",
 			AgentID:    testAgent.ID,
 			LabelsText: "",
-			Name:       agentStatusName,
+			Name:       types.AgentStatusName,
 		},
 		{
 			ID:          "2",
@@ -663,7 +663,7 @@ func TestContainerSync(t *testing.T) {
 			ID:         "1",
 			AgentID:    testAgent.ID,
 			LabelsText: "",
-			Name:       agentStatusName,
+			Name:       types.AgentStatusName,
 		},
 		{
 			ID:            "2",
@@ -727,7 +727,7 @@ func TestContainerSync(t *testing.T) {
 			ID:         "1",
 			AgentID:    testAgent.ID,
 			LabelsText: "",
-			Name:       agentStatusName,
+			Name:       types.AgentStatusName,
 		},
 		{
 			ID:          "2",
@@ -1075,7 +1075,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 				{
 					ID:      idAny,
 					AgentID: idAgentMain,
-					Name:    agentStatusName,
+					Name:    types.AgentStatusName,
 				},
 				{
 					ID:      idAny,
