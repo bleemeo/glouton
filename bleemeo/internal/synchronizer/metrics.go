@@ -342,8 +342,7 @@ type metricStateKey struct {
 	Reason bleemeoTypes.MetricStateReason
 }
 
-// countNotRegistered records one metric that will not be registered. Must not be called
-// with s.l held: logThrottle takes it.
+// countNotRegistered records one metric that will not be registered.
 func (s *Synchronizer) countNotRegistered(
 	counts map[metricStateKey]int,
 	metric gloutonTypes.Metric,

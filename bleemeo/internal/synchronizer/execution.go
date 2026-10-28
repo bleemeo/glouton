@@ -237,6 +237,15 @@ func (e *Execution) RequestSynchronizationForAll(forceCacheRefresh bool) {
 	}
 }
 
+// RequestLaterSynchronization asks for a synchronization of the specified entity to occur within
+// delay, during a later execution. It might happen earlier.
+func (e *Execution) RequestLaterSynchronization(entityName types.EntityName, forceCacheRefresh bool, delay time.Duration) {
+	e.synchronizer.l.Lock()
+	defer e.synchronizer.l.Unlock()
+
+	e.synchronizer.requestLaterSynchronizationLocked(entityName, forceCacheRefresh, delay)
+}
+
 // RequestLaterFullSynchronization ask for a full synchronization to occur within delay. It might happen earlier.
 // Prefer RequestSynchronizationForAll if you need a very soon synchronization.
 func (e *Execution) RequestLaterFullSynchronization(delay time.Duration) {

@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -70,6 +71,8 @@ func (vSphereVMMock) LatestError() error       { return nil }
 // Any change of the calls made fails it.
 // The steps stay less than 15 minutes apart, except the full synchronization, so the periodic
 // duplicated agent check, jittered between 15 and 25 minutes, always runs at the same steps.
+var errMonitorsUnavailable = errors.New("monitors unavailable")
+
 func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a table of steps.
 	helper := newHelper(t)
 	defer helper.Close()
@@ -94,6 +97,17 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 		snmp.NewMock(config.SNMPTarget{InitialName: "printer", Target: snmpAddress}, map[string]string{"fqdn": "printer.example.com"}),
 	}
 	helper.SNMPOnlineTarget = func() int { return snmpOnline }
+
+	// No container until their steps, but Docker is there. A new container waits 30 seconds, as
+	// with the default configuration, before it is registered.
+	helper.containers = []facts.Container{}
+	helper.cfg.Bleemeo.ContainerRegistrationDelaySeconds = 30
+	webContainer := facts.FakeContainer{
+		FakeContainerName: "web",
+		FakeID:            "web-container-id",
+		FakeState:         facts.ContainerRunning,
+		FakeCreatedAt:     helper.Now().Add(-time.Hour),
+	}
 
 	helper.initSynchronizer(t)
 
@@ -242,6 +256,123 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			prepare: func() {
 				// Only a new fact_updated_at triggers the facts synchronization.
 				helper.facts.SetFact("kernel", "6.2.0")
+			},
+		},
+		{
+			name: "container started",
+			prepare: func() {
+				helper.containers = []facts.Container{webContainer}
+				helper.discovery.UpdatedAt = helper.Now()
+			},
+			// A discovery synchronizes the containers, then the metrics.
+			wantCalls: map[string]int{"RegisterContainer": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityContainer:   types.SyncTypeNormal,
+				types.EntityApplication: types.SyncTypeNormal,
+				types.EntityService:     types.SyncTypeNormal,
+				types.EntityMetric:      types.SyncTypeNormal,
+			},
+		},
+		{
+			name: "container stopped",
+			prepare: func() {
+				webContainer.FakeState = facts.ContainerStopped
+				helper.containers = []facts.Container{webContainer}
+				helper.discovery.UpdatedAt = helper.Now()
+			},
+			wantCalls: map[string]int{"UpdateContainer": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityContainer:   types.SyncTypeNormal,
+				types.EntityApplication: types.SyncTypeNormal,
+				types.EntityService:     types.SyncTypeNormal,
+				types.EntityMetric:      types.SyncTypeNormal,
+			},
+		},
+		{
+			name: "container removed",
+			prepare: func() {
+				helper.containers = []facts.Container{}
+				helper.discovery.UpdatedAt = helper.Now()
+			},
+			// The container is marked deleted.
+			wantCalls: map[string]int{"UpdateContainer": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityContainer:   types.SyncTypeNormal,
+				types.EntityApplication: types.SyncTypeNormal,
+				types.EntityService:     types.SyncTypeNormal,
+				types.EntityMetric:      types.SyncTypeNormal,
+			},
+		},
+		{
+			name: "container just created",
+			prepare: func() {
+				helper.containers = []facts.Container{facts.FakeContainer{
+					FakeContainerName: "job",
+					FakeID:            "job-container-id",
+					FakeState:         facts.ContainerRunning,
+					FakeCreatedAt:     helper.Now(),
+				}}
+				helper.discovery.UpdatedAt = helper.Now()
+			},
+			// The new container waits for the registration delay. The deleted container requested
+			// a services synchronization, with a cache refresh.
+			wantCalls: map[string]int{"ListApplications": 1, "ListServices": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityContainer:   types.SyncTypeNormal,
+				types.EntityApplication: types.SyncTypeForceCacheRefresh,
+				types.EntityService:     types.SyncTypeForceCacheRefresh,
+				types.EntityMetric:      types.SyncTypeNormal,
+			},
+		},
+		{
+			name:      "delayed container due",
+			wantCalls: map[string]int{"RegisterContainer": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityContainer:   types.SyncTypeNormal,
+				types.EntityApplication: types.SyncTypeNormal,
+				types.EntityService:     types.SyncTypeNormal,
+				types.EntityMetric:      types.SyncTypeNormal,
+			},
+		},
+		{
+			name: "many monitor notifications",
+			prepare: func() {
+				for range 6 {
+					helper.s.UpdateMonitor("change", newMonitor.ID)
+				}
+			},
+			// More than 5 updates: the monitors are listed instead.
+			wantCalls: map[string]int{"ListAgents": 1, "ListMonitors": 1, "UpdateAgent": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityAgent:   types.SyncTypeForceCacheRefresh,
+				types.EntityMonitor: types.SyncTypeNormal,
+				types.EntityMetric:  types.SyncTypeNormal,
+			},
+		},
+		{
+			name: "monitor notification failed",
+			prepare: func() {
+				helper.wrapperClientMock.monitorsErr = errMonitorsUnavailable
+				helper.s.UpdateMonitor("change", newMonitor.ID)
+			},
+			wantCalls: map[string]int{"GetMonitorByID": 1, "ListAgents": 1, "UpdateAgent": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityAgent:   types.SyncTypeForceCacheRefresh,
+				types.EntityMonitor: types.SyncTypeNormal,
+				types.EntityMetric:  types.SyncTypeNormal,
+			},
+			wantErr: true,
+		},
+		{
+			name: "monitor notification retried",
+			prepare: func() {
+				helper.wrapperClientMock.monitorsErr = nil
+			},
+			// The failed update is retried a minute later.
+			wantCalls: map[string]int{"GetMonitorByID": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityMonitor: types.SyncTypeNormal,
+				types.EntityMetric:  types.SyncTypeNormal,
 			},
 		},
 		{

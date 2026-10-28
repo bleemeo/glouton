@@ -116,22 +116,6 @@ func compatibilitySyncToPerform(execution types.SynchronizationExecution, state 
 		execution.RequestSynchronizationForAll(true)
 	}
 
-	_, minDelayed := execution.GlobalState().DelayedContainers()
-
-	if execution.LastSuccessfulSync().Before(lastDiscovery) || (!minDelayed.IsZero() && execution.StartedAt().After(minDelayed)) {
-		execution.RequestSynchronization(types.EntityContainer, false)
-	}
-
-	if execution.IsSynchronizationRequested(types.EntityContainer) {
-		// Metrics registration may need containers to be synced, trigger metrics synchronization
-		execution.RequestSynchronization(types.EntityMetric, false)
-	}
-
-	if execution.IsSynchronizationRequested(types.EntityMonitor) {
-		// Metrics registration may need monitors to be synced, trigger metrics synchronization
-		execution.RequestSynchronization(types.EntityMetric, false)
-	}
-
 	if execution.StartedAt().After(state.metricRetryAt) || execution.LastSuccessfulSync().Before(lastDiscovery) || execution.LastSuccessfulSync().Before(lastAnnotationChange) || state.lastMetricCount != currentMetricCount {
 		execution.RequestSynchronization(types.EntityMetric, false)
 	}

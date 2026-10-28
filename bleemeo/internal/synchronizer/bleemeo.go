@@ -47,6 +47,11 @@ const (
 	monitorFields     = "id,account,agent,created_at,active,url,expected_content,expected_response_code,unexpected_content,ca_file,headers,head_request"
 	serviceFields     = "id,account_config,label,instance,listen_addresses,exe_path,tags,active,created_at"
 
+	// containerCacheFields are the container fields stored in local cache.
+	containerCacheFields = "id,name,container_id,container_inspect,container_status,container_created_at,container_runtime,deleted_at"
+	// containerRegisterFields are the fields used to register a container on the API.
+	containerRegisterFields = containerCacheFields + ",host,command,container_started_at,container_finished_at,container_image_id,container_image_name,docker_api_version"
+
 	// queryTrue is used as a URL query parameter value for boolean true.
 	queryTrue = "true"
 
