@@ -22,14 +22,12 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
-	"github.com/bleemeo/glouton/facts"
 )
 
 // Those state should be moved to each entity-synchronizer as needed.
 type synchronizerState struct {
 	l sync.Mutex
 
-	lastFactUpdatedAt    string
 	metricRetryAt        time.Time
 	lastMetricCount      int
 	lastMetricActivation time.Time
@@ -100,11 +98,10 @@ func (cw CompatibilityWrapperExecution) NeedSynchronization(ctx context.Context)
 	return false, nil
 }
 
-func compatibilitySyncToPerform(ctx context.Context, execution types.SynchronizationExecution, state *synchronizerState) {
+func compatibilitySyncToPerform(execution types.SynchronizationExecution, state *synchronizerState) {
 	option := execution.Option()
 
 	// Take values that will be used later before taking the lock. This reduce dead-lock risk
-	localFacts, _ := option.Facts.Facts(ctx, 24*time.Hour)
 	_, lastDiscovery := option.Discovery.GetLatestDiscovery()
 	currentMetricCount := option.Store.MetricsCount()
 	lastAnnotationChange := option.LastMetricAnnotationChange()
@@ -117,10 +114,6 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 	nextConfigAt := agent.NextConfigAt
 	if !nextConfigAt.IsZero() && nextConfigAt.Before(execution.StartedAt()) {
 		execution.RequestSynchronizationForAll(true)
-	}
-
-	if state.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
-		execution.RequestSynchronization(types.EntityFact, false)
 	}
 
 	_, minDelayed := execution.GlobalState().DelayedContainers()

@@ -30,6 +30,7 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncfacts"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -83,7 +84,7 @@ func (cl *wrapperClient) RegisterSelf(ctx context.Context, accountID, password, 
 		"initial_password":          password,
 		"initial_server_group_name": initialServerGroupName,
 		"display_name":              name,
-		factFQDN:                    fqdn,
+		syncfacts.FactFQDN:          fqdn,
 	})
 	if err != nil {
 		return "", err

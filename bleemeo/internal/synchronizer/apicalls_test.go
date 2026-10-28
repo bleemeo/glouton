@@ -24,6 +24,7 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/inputs/vsphere"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	gloutonTypes "github.com/bleemeo/glouton/types"
@@ -218,6 +219,32 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			wantSync:  map[types.EntityName]types.SyncType{types.EntityVSphere: types.SyncTypeNormal},
 		},
 		{
+			name: "local facts changed",
+			prepare: func() {
+				helper.facts.SetFact("kernel", "6.1.0")
+				helper.facts.SetFact(facts.FactUpdatedAt, helper.Now().Format(time.RFC3339))
+			},
+			// Updating the facts forces the duplicated agent check, it makes the ListFacts.
+			wantCalls: map[string]int{"ListFacts": 1, "RegisterFact": 2},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityFact: types.SyncTypeNormal},
+		},
+		{
+			name: "facts updated again",
+			prepare: func() {
+				helper.facts.SetFact(facts.FactUpdatedAt, helper.Now().Format(time.RFC3339))
+			},
+			// The API can't update a fact: the new value is registered, then the old one deleted.
+			wantCalls: map[string]int{"ListFacts": 1, "RegisterFact": 1, "DeleteFact": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityFact: types.SyncTypeNormal},
+		},
+		{
+			name: "facts unchanged",
+			prepare: func() {
+				// Only a new fact_updated_at triggers the facts synchronization.
+				helper.facts.SetFact("kernel", "6.2.0")
+			},
+		},
+		{
 			name: "full synchronization",
 			prepare: func() {
 				helper.SetTimeToNextFullSync()
@@ -228,8 +255,10 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 					labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: metricCPUUsed}),
 				})
 			},
-			// The duplicated agent check is due again, it makes the ListFacts.
+			// The duplicated agent check is due again, it makes the ListFacts. The kernel changed
+			// without a new fact_updated_at: only a full synchronization sends it.
 			wantCalls: map[string]int{
+				"DeleteFact":             1,
 				"GetGlobalInfo":          1,
 				"ListActiveMetrics":      1,
 				"ListAgentTypes":         1,
@@ -242,6 +271,7 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 				"ListGloutonConfigItems": 1,
 				"ListMonitors":           1,
 				"ListServices":           1,
+				"RegisterFact":           1,
 				"UpdateAgent":            1,
 			},
 			wantSync: fullSync,

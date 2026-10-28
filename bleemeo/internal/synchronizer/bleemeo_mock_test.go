@@ -357,10 +357,10 @@ func (wcm *wrapperClientMock) RegisterFact(_ context.Context, payload bleemeoTyp
 	return result, err
 }
 
-func (wcm *wrapperClientMock) DeleteFact(ctx context.Context, id string) error {
+func (wcm *wrapperClientMock) DeleteFact(_ context.Context, id string) error {
 	wcm.count(mockAPIResourceAgentFact, "DeleteFact")
 
-	panic("implement me")
+	return wcm.resources.agentFacts.deleteResource(func(f bleemeoTypes.AgentFact) bool { return f.ID == id })
 }
 
 func (wcm *wrapperClientMock) UpdateMetric(_ context.Context, id string, payload any, _ string) error {

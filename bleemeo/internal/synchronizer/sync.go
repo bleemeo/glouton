@@ -39,6 +39,7 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncconfig"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncdiagnostics"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncfacts"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncgloutonconfig"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncinfo"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncregistrationstatus"
@@ -198,7 +199,9 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		s.info,
 		syncagent.New(),
 		syncconfig.New(option.Cache),
-		&CompatibilityWrapper{state: state, name: types.EntityFact, method: s.syncFacts},
+		syncfacts.New(s.snmp, s.vsphere, func(ctx context.Context, client types.Client, executionStartedAt time.Time) error {
+			return s.checkDuplicatedIfNeeded(ctx, client, executionStartedAt, true)
+		}),
 		&CompatibilityWrapper{state: state, name: types.EntityContainer, method: s.syncContainers},
 		s.snmp,
 		s.vsphere,
@@ -272,7 +275,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		LastSuccessfulSync         time.Time
 		LastSync                   time.Time
 		LastMetricActivation       time.Time
-		LastFactUpdatedAt          string
 		SuccessiveErrors           int
 		FirstErrorAt               time.Time
 		MaintenanceMode            bool
@@ -300,7 +302,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		StartedAt:                  s.startedAt,
 		LastSuccessfulSync:         s.lastSuccessfulSync,
 		LastSync:                   s.lastSync,
-		LastFactUpdatedAt:          s.state.lastFactUpdatedAt,
 		LastMetricActivation:       s.state.lastMetricActivation,
 		SuccessiveErrors:           s.successiveErrors,
 		FirstErrorAt:               s.firstErrorAt,
@@ -475,7 +476,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			case IsAuthenticationError(errSync) && s.agentID != "":
 				fqdnMessage := ""
 
-				fqdn := s.option.Cache.FactsByKey()[s.agentID][factFQDN].Value
+				fqdn := s.option.Cache.FactsByKey()[s.agentID][syncfacts.FactFQDN].Value
 				if fqdn != "" {
 					fqdnMessage = " with fqdn " + fqdn
 				}
@@ -1295,7 +1296,7 @@ func (s *Synchronizer) shouldCheckDuplicatedLocked(executionStartedAt time.Time,
 func (s *Synchronizer) checkDuplicated(ctx context.Context, client types.Client) error {
 	oldFacts := s.option.Cache.FactsByKey()
 
-	if err := s.factsUpdateList(ctx, client); err != nil {
+	if err := syncfacts.UpdateList(ctx, client, s.option.Cache); err != nil {
 		return fmt.Errorf("update facts list: %w", err)
 	}
 
@@ -1336,7 +1337,7 @@ func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleeme
 	// we registered, another agent with the same ID must have modified them.
 	// Note that this won't work if the two agents are on the same host
 	// because both agents will send mostly the same facts.
-	factNames := []string{factFQDN, "primary_address", "primary_mac_address", factGloutonPID}
+	factNames := []string{syncfacts.FactFQDN, "primary_address", "primary_mac_address", syncfacts.FactGloutonPID}
 	for _, name := range factNames {
 		old, ok := oldFacts[name]
 		if !ok {
@@ -1352,7 +1353,7 @@ func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleeme
 			continue
 		}
 
-		if name == factGloutonPID {
+		if name == syncfacts.FactGloutonPID {
 			// For the fact glouton_pid we are going to be smarter. We don't want to announce a duplicate state.json
 			// when glouton crash or when its state.cache.json is restored to an older version.
 			// To solve this problem, we check that facts (old & new) where updated *after* Glouton started (this assume fact glouton_pid
@@ -1384,7 +1385,7 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		return err
 	}
 
-	fqdn := facts[factFQDN]
+	fqdn := facts[syncfacts.FactFQDN]
 	if fqdn == "" {
 		return errFQDNNotSet
 	}
@@ -1423,8 +1424,8 @@ func (s *Synchronizer) register(ctx context.Context) error {
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]any{
-			"agent_id":         agentID,
-			factGloutonVersion: version.Version,
+			"agent_id":                   agentID,
+			syncfacts.FactGloutonVersion: version.Version,
 		})
 	})
 

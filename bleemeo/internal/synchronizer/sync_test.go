@@ -98,6 +98,22 @@ const (
 	testFalseStr                 = "false"
 )
 
+// The fact keys sent by the facts entity.
+const (
+	factAgentVersion    = "agent_version"
+	factArchitecture    = "architecture"
+	factFQDN            = "fqdn"
+	factGloutonPID      = "glouton_pid"
+	factGloutonVersion  = "glouton_version"
+	factHostname        = "hostname"
+	factInstallationFmt = "installation_format"
+	factKernel          = "kernel"
+	factOSName          = "os_name"
+	factOSPrettyName    = "os_pretty_name"
+	factPublicIP        = "public_ip"
+	factVirtual         = "virtual"
+)
+
 var (
 	errInvalidAccountID    = errors.New("invalid accountId supplied")
 	errUnexpectedOperation = errors.New("unexpected action")
