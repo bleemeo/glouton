@@ -66,35 +66,38 @@ func (s *SyncContainers) EnabledInSuspendedMode() bool {
 	return false
 }
 
+// NeedSynchronizationWhileSkipped returns whether the containers need a synchronization, like
+// NeedSynchronization, while they are skipped in maintenance or suspended mode. The discovery is
+// compared with the last successful synchronization, which keeps moving while they're skipped:
+// the synchronization must stay requested until they run.
+func (s *SyncContainers) NeedSynchronizationWhileSkipped(_ context.Context, execution types.SynchronizationExecution) bool {
+	return needSynchronization(execution)
+}
+
 func (s *SyncContainers) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
+	var agentID string
+
+	if state := execution.Option().State; state != nil {
+		agentID, _ = state.BleemeoCredentials()
+	}
+
 	return &syncContainersExecution{
 		parent:    s,
 		execution: execution,
+		agentID:   agentID,
 	}, nil
 }
 
 type syncContainersExecution struct {
 	parent    *SyncContainers
 	execution types.SynchronizationExecution
+	agentID   string
 }
 
 // NeedSynchronization synchronizes the containers after a discovery, and once a delayed
 // container is due.
 func (e *syncContainersExecution) NeedSynchronization(_ context.Context) (bool, error) {
-	// Metrics registration may need containers to be synced.
-	// TODO: move to the metric entity when it gets migrated.
-	if err := e.execution.RequestLinkedSynchronization(types.EntityMetric, types.EntityContainer); err != nil {
-		return false, err
-	}
-
-	_, lastDiscovery := e.execution.Option().Discovery.GetLatestDiscovery()
-	_, minDelayed := e.execution.GlobalState().DelayedContainers()
-
-	if e.execution.LastSuccessfulSync().Before(lastDiscovery) {
-		return true, nil
-	}
-
-	return !minDelayed.IsZero() && e.execution.StartedAt().After(minDelayed), nil
+	return needSynchronization(e.execution), nil
 }
 
 // RefreshCache lists the containers from the API on a cache refresh, or after 3 errors in a row
@@ -104,10 +107,7 @@ func (e *syncContainersExecution) RefreshCache(ctx context.Context, syncType typ
 		return nil
 	}
 
-	option := e.execution.Option()
-	agentID, _ := option.State.BleemeoCredentials()
-
-	return updateList(ctx, e.execution.BleemeoAPIClient(), option.Cache, agentID)
+	return updateList(ctx, e.execution.BleemeoAPIClient(), e.execution.Option().Cache, e.agentID)
 }
 
 func (e *syncContainersExecution) SyncRemoteAndLocal(ctx context.Context, _ types.SyncType) error {
@@ -139,7 +139,6 @@ func (e *syncContainersExecution) SyncRemoteAndLocal(ctx context.Context, _ type
 		return err
 	}
 
-	agentID, _ := option.State.BleemeoCredentials()
 	apiClient := e.execution.BleemeoAPIClient()
 
 	// I'm not sure this really belong here. This update is here because it was here,
@@ -148,7 +147,7 @@ func (e *syncContainersExecution) SyncRemoteAndLocal(ctx context.Context, _ type
 	delayedContainer, _ := e.execution.GlobalState().DelayedContainers()
 
 	// The API doesn't delete containers.
-	err = e.parent.registerAndUpdate(ctx, apiClient, option.Cache, localContainers, delayedContainer, agentID, factsMap["docker_api_version"])
+	err = e.parent.registerAndUpdate(ctx, apiClient, option.Cache, localContainers, delayedContainer, e.agentID, factsMap["docker_api_version"])
 	if err != nil {
 		return err
 	}
@@ -161,6 +160,19 @@ func (e *syncContainersExecution) SyncRemoteAndLocal(ctx context.Context, _ type
 }
 
 func (e *syncContainersExecution) FinishExecution(_ context.Context) {
+}
+
+// needSynchronization returns whether a discovery happened since the last successful
+// synchronization, or a delayed container is due.
+func needSynchronization(execution types.SynchronizationExecution) bool {
+	_, lastDiscovery := execution.Option().Discovery.GetLatestDiscovery()
+	_, minDelayed := execution.GlobalState().DelayedContainers()
+
+	if execution.LastSuccessfulSync().Before(lastDiscovery) {
+		return true
+	}
+
+	return !minDelayed.IsZero() && execution.StartedAt().After(minDelayed)
 }
 
 // updateList updates the containers of the cache from the API.

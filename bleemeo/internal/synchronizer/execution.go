@@ -326,8 +326,6 @@ func (e *Execution) run(ctx context.Context) error {
 			e.RequestSynchronizationForAll(true)
 		}
 
-		compatibilitySyncToPerform(e, e.synchronizer.state)
-
 		e.applyNeedSynchronization(ctx)
 
 		if e.hadWork() {

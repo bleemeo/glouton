@@ -105,6 +105,24 @@ func (s *SyncFacts) EnabledInSuspendedMode() bool {
 	return false
 }
 
+// NeedSynchronizationWhileSkipped returns whether the facts were updated, like
+// NeedSynchronization, while they are skipped in maintenance or suspended mode: the
+// synchronization stays requested until they run.
+func (s *SyncFacts) NeedSynchronizationWhileSkipped(ctx context.Context, execution types.SynchronizationExecution) bool {
+	return s.needSynchronization(ctx, execution)
+}
+
+// needSynchronization returns whether the facts were updated since the last facts fully
+// synchronized.
+func (s *SyncFacts) needSynchronization(ctx context.Context, execution types.SynchronizationExecution) bool {
+	localFacts, _ := execution.Option().Facts.Facts(ctx, 24*time.Hour)
+
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt]
+}
+
 func (s *SyncFacts) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
 	return &syncFactsExecution{
 		parent:    s,
@@ -146,12 +164,7 @@ func (e *syncFactsExecution) NeedSynchronization(ctx context.Context) (bool, err
 		return false, err
 	}
 
-	localFacts, _ := e.execution.Option().Facts.Facts(ctx, 24*time.Hour)
-
-	e.parent.l.Lock()
-	defer e.parent.l.Unlock()
-
-	return e.parent.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt], nil
+	return e.parent.needSynchronization(ctx, e.execution), nil
 }
 
 func (e *syncFactsExecution) RefreshCache(_ context.Context, _ types.SyncType) error {

@@ -128,6 +128,25 @@ func IsNotFound(err error) bool {
 	return false
 }
 
+// IsServerError returns true if the error is an APIError due to 5xx.
+func IsServerError(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode >= 500
+	}
+
+	return false
+}
+
+// APIErrorContent returns the API error response, if the error is an APIError.
+// Return an empty string if the error isn't an APIError.
+func APIErrorContent(err error) string {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return string(apiError.Response)
+	}
+
+	return ""
+}
+
 // IsRefusedValue tells whether the API, or a proxy in front of it, refused the value sent itself:
 // invalid (400, 422) or too large (413). Other errors, such as an authentication error or
 // throttling, are the synchronizer's to handle.

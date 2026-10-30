@@ -73,6 +73,8 @@ func (vSphereVMMock) LatestError() error       { return nil }
 // duplicated agent check, jittered between 15 and 25 minutes, always runs at the same steps.
 var errMonitorsUnavailable = errors.New("monitors unavailable")
 
+const metricMemUsed = "mem_used"
+
 func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a table of steps.
 	helper := newHelper(t)
 	defer helper.Close()
@@ -376,6 +378,34 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			},
 		},
 		{
+			name: "new metric",
+			prepare: func() {
+				helper.pushPoints(t, []labels.Labels{
+					labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: metricMemUsed}),
+				})
+			},
+			// The metric count changed. Registering more than 3% new metrics lists them all first.
+			wantCalls: map[string]int{"ListActiveMetrics": 1, "ListMetricsBy": 1, "RegisterMetric": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMetric: types.SyncTypeNormal},
+		},
+		{
+			name: "metric changed on the API",
+			prepare: func() {
+				helper.s.UpdateMetrics(metricIDByName(t, helper, metricCPUUsed))
+			},
+			// One metric is more than 3% of the few metrics of the agent: all are listed.
+			wantCalls: map[string]int{"ListActiveMetrics": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMetric: types.SyncTypeNormal},
+		},
+		{
+			name: "all metrics changed on the API",
+			prepare: func() {
+				helper.s.UpdateMetrics("")
+			},
+			wantCalls: map[string]int{"ListActiveMetrics": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMetric: types.SyncTypeForceCacheRefresh},
+		},
+		{
 			name: "full synchronization",
 			prepare: func() {
 				helper.SetTimeToNextFullSync()
@@ -384,6 +414,7 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 				// metric would sometimes be deactivated.
 				helper.pushPoints(t, []labels.Labels{
 					labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: metricCPUUsed}),
+					labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: metricMemUsed}),
 				})
 			},
 			// The duplicated agent check is due again, it makes the ListFacts. The kernel changed
@@ -431,8 +462,17 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			},
 		},
 		{
-			name:     "maintenance not polled again",
-			wantSync: map[types.EntityName]types.SyncType{types.EntityAgent: types.SyncTypeForceCacheRefresh},
+			// A discovery during the maintenance: the containers and the metrics are skipped, and
+			// requested again on each execution until it ends.
+			name: "maintenance not polled again",
+			prepare: func() {
+				helper.discovery.UpdatedAt = helper.Now()
+			},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityAgent:     types.SyncTypeForceCacheRefresh,
+				types.EntityContainer: types.SyncTypeNormal,
+				types.EntityMetric:    types.SyncTypeNormal,
+			},
 		},
 		{
 			// Leaving the maintenance checks for a duplicated agent, it makes the ListFacts.
@@ -445,14 +485,21 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			},
 			wantCalls: map[string]int{"GetGlobalInfo": 1, "ListFacts": 1},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityInfo:  types.SyncTypeNormal,
-				types.EntityAgent: types.SyncTypeForceCacheRefresh,
+				types.EntityInfo:      types.SyncTypeNormal,
+				types.EntityAgent:     types.SyncTypeForceCacheRefresh,
+				types.EntityContainer: types.SyncTypeNormal,
+				types.EntityMetric:    types.SyncTypeNormal,
 			},
 		},
 		{
+			// The entities skipped during the maintenance, including for its discovery, run now.
 			name:      "after maintenance",
 			wantCalls: map[string]int{"ListAgents": 1, "UpdateAgent": 1},
-			wantSync:  map[types.EntityName]types.SyncType{types.EntityAgent: types.SyncTypeForceCacheRefresh},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityAgent:     types.SyncTypeForceCacheRefresh,
+				types.EntityContainer: types.SyncTypeNormal,
+				types.EntityMetric:    types.SyncTypeNormal,
+			},
 		},
 		{
 			// MQTT isn't reachable: agent_status is marked critical.
@@ -514,6 +561,15 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			},
 			wantCalls: map[string]int{"GetGlobalInfo": 1},
 			wantSync:  map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeForceCacheRefresh},
+		},
+		{
+			name: "metric gone",
+			prepare: func() {
+				helper.store.DropMetrics([]map[string]string{{gloutonTypes.LabelName: metricMemUsed}})
+			},
+			// The metric count changed: the metric gone is deactivated.
+			wantCalls: map[string]int{"SetMetricActive": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMetric: types.SyncTypeNormal},
 		},
 		{
 			name: "reload",
@@ -755,4 +811,19 @@ func TestInfoSynchronizedWithOthers(t *testing.T) {
 			t.Errorf("%s: info sync type = %v, want %v", step.name, got, step.want)
 		}
 	}
+}
+
+// metricIDByName returns the ID of the registered metric named name.
+func metricIDByName(t *testing.T, helper *syncTestHelper, name string) string {
+	t.Helper()
+
+	for _, m := range helper.s.option.Cache.Metrics() {
+		if gloutonTypes.TextToLabels(m.LabelsText)[gloutonTypes.LabelName] == name {
+			return m.ID
+		}
+	}
+
+	t.Fatalf("metric %s isn't registered", name)
+
+	return ""
 }

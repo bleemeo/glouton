@@ -363,8 +363,8 @@ func newMonitor(id string) bleemeoTypes.Monitor {
 	}
 }
 
-// refresh runs the execution until SyncRemoteAndLocal if runSync, else until RefreshCache.
-func refresh(t *testing.T, s *SyncMonitors, execution *fakeExecution, syncType types.SyncType, runSync bool) (refreshErr error, syncErr error) {
+// run runs an execution of the entity, and returns the error of its synchronization.
+func run(t *testing.T, s *SyncMonitors, execution *fakeExecution, syncType types.SyncType) error {
 	t.Helper()
 
 	e, err := s.PrepareExecution(t.Context(), execution)
@@ -374,12 +374,11 @@ func refresh(t *testing.T, s *SyncMonitors, execution *fakeExecution, syncType t
 
 	defer e.FinishExecution(t.Context())
 
-	refreshErr = e.RefreshCache(t.Context(), syncType)
-	if refreshErr == nil && runSync {
-		syncErr = e.SyncRemoteAndLocal(t.Context(), syncType)
+	if err := e.RefreshCache(t.Context(), syncType); err != nil {
+		return err
 	}
 
-	return refreshErr, syncErr
+	return e.SyncRemoteAndLocal(t.Context(), syncType)
 }
 
 func monitorIDs(monitors []bleemeoTypes.Monitor) []string {
@@ -445,8 +444,8 @@ func TestManyUpdatesListMonitors(t *testing.T) {
 		s.UpdateMonitor("change", testMonitorID)
 	}
 
-	if refreshErr, _ := refresh(t, s, execution, types.SyncTypeNormal, false); refreshErr != nil {
-		t.Fatal(refreshErr)
+	if err := run(t, s, execution, types.SyncTypeNormal); err != nil {
+		t.Fatal(err)
 	}
 
 	if execution.client.listCount != 1 || execution.client.getCount != 0 {
@@ -474,8 +473,8 @@ func TestFailedUpdateRetried(t *testing.T) {
 
 	s.UpdateMonitor("change", "first")
 
-	if refreshErr, _ := refresh(t, s, execution, types.SyncTypeNormal, false); !errors.Is(refreshErr, errAPIUnavailable) {
-		t.Fatalf("RefreshCache() = %v, want %v", refreshErr, errAPIUnavailable)
+	if err := run(t, s, execution, types.SyncTypeNormal); !errors.Is(err, errAPIUnavailable) {
+		t.Fatalf("SyncRemoteAndLocal() = %v, want %v", err, errAPIUnavailable)
 	}
 
 	want := []laterRequest{{entity: types.EntityMonitor, requestFull: false, delay: time.Minute}}
@@ -490,8 +489,8 @@ func TestFailedUpdateRetried(t *testing.T) {
 	execution.client.err = nil
 	execution.client.onGet = nil
 
-	if refreshErr, _ := refresh(t, s, execution, types.SyncTypeNormal, false); refreshErr != nil {
-		t.Fatal(refreshErr)
+	if err := run(t, s, execution, types.SyncTypeNormal); err != nil {
+		t.Fatal(err)
 	}
 
 	if diff := cmp.Diff([]string{"first"}, monitorIDs(s.cache.Monitors())); diff != "" {
@@ -509,8 +508,8 @@ func TestBlackboxDisabled(t *testing.T) {
 
 	s.UpdateMonitor("change", testMonitorID)
 
-	if refreshErr, _ := refresh(t, s, execution, types.SyncTypeForceCacheRefresh, false); refreshErr != nil {
-		t.Fatal(refreshErr)
+	if err := run(t, s, execution, types.SyncTypeForceCacheRefresh); err != nil {
+		t.Fatal(err)
 	}
 
 	if execution.client.listCount != 0 || execution.client.getCount != 0 || len(s.pending) != 0 {
@@ -527,9 +526,8 @@ func TestMissingProbeConfig(t *testing.T) {
 	s := New(&cache.Cache{}, nil, manager)
 	execution := newFakeExecution(newMonitor(testMonitorID))
 
-	_, syncErr := refresh(t, s, execution, types.SyncTypeForceCacheRefresh, true)
-	if !errors.Is(syncErr, errMissingAccountConf) {
-		t.Fatalf("SyncRemoteAndLocal() = %v, want %v", syncErr, errMissingAccountConf)
+	if err := run(t, s, execution, types.SyncTypeForceCacheRefresh); !errors.Is(err, errMissingAccountConf) {
+		t.Fatalf("SyncRemoteAndLocal() = %v, want %v", err, errMissingAccountConf)
 	}
 
 	if full, ok := execution.requested[types.EntityConfig]; !ok || !full {
@@ -538,31 +536,5 @@ func TestMissingProbeConfig(t *testing.T) {
 
 	if manager.calls != 0 {
 		t.Errorf("the prober got the monitors %d times, want 0", manager.calls)
-	}
-}
-
-// TestAppliedWhenSyncSkipped checks the monitors read by RefreshCache are given to the prober
-// even if SyncRemoteAndLocal doesn't run, once.
-func TestAppliedWhenSyncSkipped(t *testing.T) {
-	t.Parallel()
-
-	manager := &fakeMonitorManager{}
-	s := New(&cache.Cache{}, nil, manager)
-
-	if refreshErr, _ := refresh(t, s, newFakeExecution(), types.SyncTypeForceCacheRefresh, false); refreshErr != nil {
-		t.Fatal(refreshErr)
-	}
-
-	if manager.calls != 1 {
-		t.Errorf("the prober got the monitors %d times, want 1", manager.calls)
-	}
-
-	// Nothing to read: the prober isn't updated.
-	if refreshErr, _ := refresh(t, s, newFakeExecution(), types.SyncTypeNormal, true); refreshErr != nil {
-		t.Fatal(refreshErr)
-	}
-
-	if manager.calls != 1 {
-		t.Errorf("the prober got the monitors %d times, want 1", manager.calls)
 	}
 }

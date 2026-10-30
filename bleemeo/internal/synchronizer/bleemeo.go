@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -55,18 +56,24 @@ const (
 	// queryTrue is used as a URL query parameter value for boolean true.
 	queryTrue = "true"
 
+	// stringFalse and stringTrue are the values of the active parameter of the metrics.
+	stringFalse = "False"
+	stringTrue  = "True"
+
 	// resourceMonitor isn't yet defined by bleemeo-go.
 	resourceMonitor bleemeo.Resource = "v1/monitor/"
 
 	// paramFields is the URL query parameter name for specifying API response fields.
-	paramFields = "fields"
+	paramFields = bleemeoapi.ParamFields
 
 	// paramAgent is the URL query parameter name for filtering by agent.
-	paramAgent = "agent"
+	paramAgent = bleemeoapi.ParamAgent
 
 	// paramActive is the URL query parameter name for filtering by active status.
 	paramActive = "active"
 )
+
+var errCannotParse = errors.New("couldn't parse monitor")
 
 func (cl *wrapperClient) GetGlobalInfo(ctx context.Context) (bleemeoTypes.GlobalInfo, error) {
 	var globalInfo bleemeoTypes.GlobalInfo
@@ -439,7 +446,7 @@ func (cl *wrapperClient) ListInactiveMetrics(ctx context.Context, stopSearchingP
 
 func (cl *wrapperClient) listMetrics(ctx context.Context, active bool, stopSearchingPredicate func(labelsText string) bool) ([]bleemeoapi.MetricPayload, error) {
 	params := url.Values{
-		paramFields: {metricFields},
+		paramFields: {bleemeoapi.MetricFields},
 	}
 
 	if active {
@@ -492,7 +499,7 @@ func (cl *wrapperClient) ListMetricsBy(ctx context.Context, params url.Values) (
 			continue
 		}
 
-		metricsByUUID[metric.ID] = metricFromAPI(metric, metricsByUUID[metric.ID].FirstSeenAt)
+		metricsByUUID[metric.ID] = bleemeoapi.MetricFromAPI(metric, metricsByUUID[metric.ID].FirstSeenAt)
 	}
 
 	return metricsByUUID, iter.Err()
@@ -501,7 +508,7 @@ func (cl *wrapperClient) ListMetricsBy(ctx context.Context, params url.Values) (
 func (cl *wrapperClient) GetMetricByID(ctx context.Context, id string) (bleemeoapi.MetricPayload, error) {
 	var metric bleemeoapi.MetricPayload
 
-	err := cl.Get(ctx, bleemeo.ResourceMetric, id, metricFields, &metric)
+	err := cl.Get(ctx, bleemeo.ResourceMetric, id, bleemeoapi.MetricFields, &metric)
 
 	return metric, err
 }
@@ -509,7 +516,7 @@ func (cl *wrapperClient) GetMetricByID(ctx context.Context, id string) (bleemeoa
 func (cl *wrapperClient) RegisterMetric(ctx context.Context, payload bleemeoapi.MetricPayload) (bleemeoapi.MetricPayload, error) {
 	var result bleemeoapi.MetricPayload
 
-	err := cl.Create(ctx, bleemeo.ResourceMetric, payload, metricFields, &result)
+	err := cl.Create(ctx, bleemeo.ResourceMetric, payload, bleemeoapi.MetricFields, &result)
 
 	return result, err
 }

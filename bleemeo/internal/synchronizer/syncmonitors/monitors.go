@@ -155,33 +155,26 @@ func (s *SyncMonitors) requeue(updates []monitorUpdate) {
 type syncMonitorsExecution struct {
 	parent    *SyncMonitors
 	execution types.SynchronizationExecution
-
-	// updated is whether RefreshCache updated the monitors of the cache.
-	updated bool
-	// applied is whether the monitors were given to the blackbox prober.
-	applied bool
 }
 
 func (e *syncMonitorsExecution) NeedSynchronization(_ context.Context) (bool, error) {
-	// Metrics registration may need monitors to be synced.
-	// TODO: move to the metric entity when it gets migrated.
-	if err := e.execution.RequestLinkedSynchronization(types.EntityMetric, types.EntityMonitor); err != nil {
-		return false, err
-	}
-
 	// The monitor updates request their synchronization when they're received.
 	return false, nil
 }
 
-func (e *syncMonitorsExecution) RefreshCache(ctx context.Context, syncType types.SyncType) error {
-	if !e.execution.Option().Config.Blackbox.Enable {
-		// prevent a tiny memory leak
-		e.parent.popPending()
+func (e *syncMonitorsExecution) RefreshCache(_ context.Context, _ types.SyncType) error {
+	// The monitors are read by SyncRemoteAndLocal, with the updates they apply: the updates are
+	// only taken when the monitors are synchronized.
+	return nil
+}
 
+func (e *syncMonitorsExecution) SyncRemoteAndLocal(ctx context.Context, syncType types.SyncType) error {
+	pending := e.parent.popPending()
+
+	if !e.execution.Option().Config.Blackbox.Enable {
+		// The updates are dropped: nothing probes the monitors.
 		return nil
 	}
-
-	pending := e.parent.popPending()
 
 	// 5 is definitely a random heuristic, but we consider more than five simultaneous updates as more
 	// costly that a single full sync, due to the cost of updateMonitorManager()
@@ -216,19 +209,10 @@ func (e *syncMonitorsExecution) RefreshCache(ctx context.Context, syncType types
 	}
 
 	e.parent.cache.SetMonitors(monitors)
-	e.updated = true
-
-	return nil
-}
-
-func (e *syncMonitorsExecution) SyncRemoteAndLocal(_ context.Context, _ types.SyncType) error {
-	if !e.updated {
-		return nil
-	}
 
 	probeConfigs := e.parent.cache.ProbeConfigByAccountID()
 
-	for _, m := range e.parent.cache.Monitors() {
+	for _, m := range monitors {
 		if _, ok := probeConfigs[m.Account]; !ok {
 			e.execution.RequestSynchronization(types.EntityConfig, true)
 
@@ -236,21 +220,10 @@ func (e *syncMonitorsExecution) SyncRemoteAndLocal(_ context.Context, _ types.Sy
 		}
 	}
 
-	e.applied = true
-
 	return e.parent.ApplyMonitorUpdate()
 }
 
-// FinishExecution gives the monitors to the blackbox prober when RefreshCache updated them but
-// SyncRemoteAndLocal didn't run, so that they aren't lost until the next update.
 func (e *syncMonitorsExecution) FinishExecution(_ context.Context) {
-	if !e.updated || e.applied {
-		return
-	}
-
-	if err := e.parent.ApplyMonitorUpdate(); err != nil {
-		logger.V(1).Printf("Failed to update the monitors: %v", err)
-	}
 }
 
 func hashAgentID(agentID string) uint64 {

@@ -373,7 +373,7 @@ func (helper *syncTestHelper) SetCacheMetrics(metrics ...bleemeoapi.MetricPayloa
 	tmp := make([]bleemeoTypes.Metric, 0, len(metrics))
 
 	for _, m := range metrics {
-		tmp = append(tmp, metricFromAPI(m, helper.Now()))
+		tmp = append(tmp, bleemeoapi.MetricFromAPI(m, helper.Now()))
 	}
 
 	helper.s.option.Cache.SetMetrics(tmp)

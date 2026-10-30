@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncfacts"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
@@ -102,9 +103,9 @@ const (
 const (
 	factAgentVersion    = "agent_version"
 	factArchitecture    = "architecture"
-	factFQDN            = "fqdn"
-	factGloutonPID      = "glouton_pid"
-	factGloutonVersion  = "glouton_version"
+	factFQDN            = syncfacts.FactFQDN
+	factGloutonPID      = syncfacts.FactGloutonPID
+	factGloutonVersion  = syncfacts.FactGloutonVersion
 	factHostname        = "hostname"
 	factInstallationFmt = "installation_format"
 	factKernel          = "kernel"
@@ -145,15 +146,15 @@ func TestSync(t *testing.T) {
 	// Did we store all the metrics ?
 	syncedMetrics := helper.s.option.Cache.Metrics()
 	want := []bleemeoTypes.Metric{
-		metricFromAPI(testAgentMetric1, time.Time{}),
-		metricFromAPI(testAgentMetric2, time.Time{}),
-		metricFromAPI(testMonitorMetricPrivateProbe, time.Time{}),
-		metricFromAPI(bleemeoapi.MetricPayload{
+		bleemeoapi.MetricFromAPI(testAgentMetric1, time.Time{}),
+		bleemeoapi.MetricFromAPI(testAgentMetric2, time.Time{}),
+		bleemeoapi.MetricFromAPI(testMonitorMetricPrivateProbe, time.Time{}),
+		bleemeoapi.MetricFromAPI(bleemeoapi.MetricPayload{
 			ID:      "1",
 			AgentID: testAgent.ID,
 			Name:    types.AgentStatusName,
 		}, time.Time{}),
-		metricFromAPI(bleemeoapi.MetricPayload{
+		bleemeoapi.MetricFromAPI(bleemeoapi.MetricPayload{
 			ID:      "2",
 			AgentID: testAgent.ID,
 			Name:    metricCPUUsed,

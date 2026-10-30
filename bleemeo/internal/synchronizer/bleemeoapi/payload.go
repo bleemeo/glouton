@@ -17,7 +17,10 @@
 package bleemeoapi
 
 import (
+	"time"
+
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 )
 
 type ServicePayload struct {
@@ -55,4 +58,28 @@ type AgentPayload struct {
 
 type RemoteDiagnostic struct {
 	Name string `json:"name"`
+}
+
+// MetricFromAPI converts a metricPayload received from API to a bleemeoTypes.Metric.
+func MetricFromAPI(mp MetricPayload, lastTime time.Time) bleemeoTypes.Metric {
+	if mp.LabelsText == "" {
+		labels := map[string]string{
+			gloutonTypes.LabelName:         mp.Name,
+			gloutonTypes.LabelInstanceUUID: mp.AgentID,
+		}
+
+		if mp.Item != "" {
+			labels[gloutonTypes.LabelItem] = mp.Item
+		}
+
+		mp.LabelsText = gloutonTypes.LabelsToText(labels)
+	}
+
+	if !lastTime.IsZero() {
+		mp.Metric.FirstSeenAt = lastTime
+	} else {
+		mp.Metric.FirstSeenAt = time.Now().Truncate(time.Second)
+	}
+
+	return mp.Metric
 }

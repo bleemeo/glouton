@@ -201,15 +201,6 @@ func IsAuthenticationError(err error) bool {
 	return errors.As(err, &authError)
 }
 
-// IsServerError returns true if the error is an APIError due to 5xx.
-func IsServerError(err error) bool {
-	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
-		return apiError.StatusCode >= 500
-	}
-
-	return false
-}
-
 // IsThrottleError returns true if the error is an APIError due to 429 - Too many requests.
 //
 // ThrottleDeadline could be used to get recommended retry deadline.
@@ -217,14 +208,4 @@ func IsThrottleError(err error) bool {
 	throttleError := new(bleemeo.ThrottleError)
 
 	return errors.As(err, &throttleError)
-}
-
-// APIErrorContent returns the API error response, if the error is an APIError.
-// Return an empty string if the error isn't an APIError.
-func APIErrorContent(err error) string {
-	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
-		return string(apiError.Response)
-	}
-
-	return ""
 }

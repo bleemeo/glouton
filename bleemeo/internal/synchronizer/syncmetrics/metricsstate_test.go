@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package synchronizer
+package syncmetrics
 
 import (
 	"strconv"
@@ -50,10 +50,12 @@ func metricWithItem(name, item string) labelsMetric {
 	return labelsMetric{lbls: map[string]string{gloutonTypes.LabelName: name, gloutonTypes.LabelItem: item}}
 }
 
-func newMetricsStateSync(notRegistered map[metricStateKey]int) *Synchronizer {
-	return &Synchronizer{
-		option:               types.Option{Cache: &cache.Cache{}},
-		notRegisteredMetrics: notRegistered,
+func newMetricsStateSync(notRegistered map[metricStateKey]int) *syncMetricsExecution {
+	return &syncMetricsExecution{
+		SyncMetrics: &SyncMetrics{
+			option:               types.Option{Cache: &cache.Cache{}},
+			notRegisteredMetrics: notRegistered,
+		},
 	}
 }
 
@@ -67,7 +69,7 @@ type failure struct {
 // would: notRegistered is what filterMetrics staged, failures what registerMetrics left in
 // the cache.
 func publishUnregistered(
-	s *Synchronizer,
+	s *syncMetricsExecution,
 	notRegistered map[metricStateKey]int,
 	failures []failure,
 	metrics ...gloutonTypes.Metric,
@@ -377,9 +379,9 @@ func TestMetricsStateOnlyOwnMetrics(t *testing.T) {
 	}
 }
 
-// metricsStateOf returns the rows of s.metricsState.
-func metricsStateOf(s *Synchronizer) []bleemeoTypes.MetricState {
-	rows, _ := s.metricsState()
+// metricsStateOf returns the rows of s.MetricsState.
+func metricsStateOf(s *syncMetricsExecution) []bleemeoTypes.MetricState {
+	rows, _ := s.MetricsState()
 
 	return rows
 }

@@ -353,10 +353,14 @@ func needSync(t *testing.T, s *SyncFacts, execution *fakeExecution, want bool) {
 	if diff := cmp.Diff(wantLinked, execution.linked); diff != "" {
 		t.Errorf("linked synchronizations mismatch (-want +got)\n%s", diff)
 	}
+
+	if need := s.NeedSynchronizationWhileSkipped(t.Context(), execution); need != want {
+		t.Errorf("NeedSynchronizationWhileSkipped() = %v, want %v", need, want)
+	}
 }
 
-// TestNeedSynchronization checks the facts are synchronized when fact_updated_at changes, and
-// with the SNMP agents.
+// TestNeedSynchronization checks the facts are synchronized when fact_updated_at changes, also
+// while they are skipped in maintenance or suspended mode, and with the SNMP agents.
 func TestNeedSynchronization(t *testing.T) {
 	t.Parallel()
 

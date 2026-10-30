@@ -244,16 +244,13 @@ func (s fakeGlobalState) DelayedContainers() (map[string]time.Time, time.Time) {
 	return nil, s.minDelayed
 }
 
-// fakeExecution gives the discovery and the times to the entity, and records the linked
-// synchronizations it requests. Any other call panics.
+// fakeExecution gives the discovery and the times to the entity. Any other call panics.
 type fakeExecution struct {
 	types.SynchronizationExecution
 
 	discovery          *discovery.MockDiscoverer
 	minDelayed         time.Time
 	lastSuccessfulSync time.Time
-
-	linked [][2]types.EntityName
 }
 
 func (e *fakeExecution) Option() types.Option {
@@ -267,14 +264,8 @@ func (e *fakeExecution) GlobalState() types.SynchronizedGlobalState {
 func (e *fakeExecution) LastSuccessfulSync() time.Time { return e.lastSuccessfulSync }
 func (e *fakeExecution) StartedAt() time.Time          { return testNow() }
 
-func (e *fakeExecution) RequestLinkedSynchronization(target types.EntityName, trigger types.EntityName) error {
-	e.linked = append(e.linked, [2]types.EntityName{target, trigger})
-
-	return nil
-}
-
 // TestNeedSynchronization checks the containers are synchronized after a discovery, and once a
-// delayed container is due, and the metrics with them.
+// delayed container is due, also while they are skipped in maintenance or suspended mode.
 func TestNeedSynchronization(t *testing.T) {
 	t.Parallel()
 
@@ -302,7 +293,9 @@ func TestNeedSynchronization(t *testing.T) {
 				lastSuccessfulSync: lastSync,
 			}
 
-			e, err := newEntity().PrepareExecution(t.Context(), execution)
+			s := newEntity()
+
+			e, err := s.PrepareExecution(t.Context(), execution)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -312,9 +305,8 @@ func TestNeedSynchronization(t *testing.T) {
 				t.Errorf("NeedSynchronization() = %v, %v, want %v", need, err, tt.want)
 			}
 
-			want := [][2]types.EntityName{{types.EntityMetric, types.EntityContainer}}
-			if diff := cmp.Diff(want, execution.linked); diff != "" {
-				t.Errorf("linked synchronizations mismatch (-want +got)\n%s", diff)
+			if need := s.NeedSynchronizationWhileSkipped(t.Context(), execution); need != tt.want {
+				t.Errorf("NeedSynchronizationWhileSkipped() = %v, want %v", need, tt.want)
 			}
 		})
 	}
