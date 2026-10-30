@@ -63,7 +63,7 @@ func (s *SyncServices) EnabledInSuspendedMode() bool {
 
 func (s *SyncServices) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
 	r := &syncServicesExecution{
-		currentExecution:     execution,
+		execution:            execution,
 		parent:               s,
 		previousKnownService: execution.Option().Cache.ServicesByUUID(),
 	}
@@ -72,23 +72,19 @@ func (s *SyncServices) PrepareExecution(_ context.Context, execution types.Synch
 }
 
 type syncServicesExecution struct {
-	currentExecution     types.SynchronizationExecution
+	execution            types.SynchronizationExecution
 	previousKnownService map[string]bleemeoTypes.Service
 	parent               *SyncServices
 }
 
 func (s *syncServicesExecution) NeedSynchronization(_ context.Context) (bool, error) {
-	if s.currentExecution == nil {
-		return false, fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
-	}
+	_, lastDiscovery := s.execution.Option().Discovery.GetLatestDiscovery()
+	_, minDelayed := s.execution.GlobalState().DelayedContainers()
 
-	_, lastDiscovery := s.currentExecution.Option().Discovery.GetLatestDiscovery()
-	_, minDelayed := s.currentExecution.GlobalState().DelayedContainers()
-
-	if s.currentExecution.LastSuccessfulSync().Before(lastDiscovery) || (!minDelayed.IsZero() && s.currentExecution.StartedAt().After(minDelayed)) {
+	if s.execution.LastSuccessfulSync().Before(lastDiscovery) || (!minDelayed.IsZero() && s.execution.StartedAt().After(minDelayed)) {
 		// Metrics registration may need services to be synced, trigger metrics synchronization to be sure any
 		// possible blocked metrics get registered after service are registered
-		s.currentExecution.RequestSynchronization(types.EntityMetric, false)
+		s.execution.RequestSynchronization(types.EntityMetric, false)
 
 		return true, nil
 	}
@@ -97,17 +93,13 @@ func (s *syncServicesExecution) NeedSynchronization(_ context.Context) (bool, er
 }
 
 func (s *syncServicesExecution) RefreshCache(ctx context.Context, syncType types.SyncType) error {
-	if s.currentExecution == nil {
-		return fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
-	}
-
-	if s.currentExecution.GlobalState().SuccessiveErrors() == 3 {
+	if s.execution.GlobalState().SuccessiveErrors() == 3 {
 		// After 3 error, try to force a full synchronization to see if it solve the issue.
 		syncType = types.SyncTypeForceCacheRefresh
 	}
 
 	if syncType == types.SyncTypeForceCacheRefresh {
-		err := serviceUpdateList(ctx, s.currentExecution)
+		err := serviceUpdateList(ctx, s.execution)
 		if err != nil {
 			return err
 		}
@@ -116,18 +108,11 @@ func (s *syncServicesExecution) RefreshCache(ctx context.Context, syncType types
 	return nil
 }
 
-func (s *syncServicesExecution) SyncRemoteAndLocal(ctx context.Context, syncType types.SyncType) error {
-	_ = syncType
-
-	if s.currentExecution == nil {
-		return fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
-	}
-
-	return s.syncRemoteAndLocal(ctx, s.currentExecution)
+func (s *syncServicesExecution) SyncRemoteAndLocal(ctx context.Context, _ types.SyncType) error {
+	return s.syncRemoteAndLocal(ctx, s.execution)
 }
 
 func (s *syncServicesExecution) FinishExecution(_ context.Context) {
-	s.currentExecution = nil
 }
 
 // logThrottle logs a message at most once per hour, all other logs are dropped to prevent spam.

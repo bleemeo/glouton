@@ -205,7 +205,7 @@ func (e *Execution) RequestSynchronization(entityName types.EntityName, forceCac
 
 func (e *Execution) RequestLinkedSynchronization(targetEntityName types.EntityName, triggerEntityName types.EntityName) error {
 	if e.syncListStarted {
-		return fmt.Errorf("%w: RequestLinkedSynchronization must be called during RequestSynchronization()", types.ErrUnexpectedWorkflow)
+		return fmt.Errorf("%w: RequestLinkedSynchronization must be called during NeedSynchronization()", types.ErrUnexpectedWorkflow)
 	}
 
 	for idx, ee := range e.entities {
@@ -256,20 +256,6 @@ func (e *Execution) RequestLaterFullSynchronization(delay time.Duration) {
 	if e.synchronizer.nextFullSync.After(targetTime) {
 		e.synchronizer.nextFullSync = targetTime
 	}
-}
-
-// IsSynchronizationRequested return whether a synchronization was request for the
-// specific entity.
-// Note: even if this method return false, a synchronization might occur if someone call RequestSynchronize later.
-// Use RequestLinkedSynchronization to overcome this limitation.
-func (e *Execution) IsSynchronizationRequested(entityName types.EntityName) bool {
-	for _, row := range e.entities {
-		if row.entity.Name() == entityName {
-			return row.syncType != types.SyncTypeNone
-		}
-	}
-
-	return false
 }
 
 func (e *Execution) Option() types.Option {

@@ -139,7 +139,6 @@ func (e *syncGloutonConfigExecution) SyncRemoteAndLocal(ctx context.Context, syn
 }
 
 func (e *syncGloutonConfigExecution) FinishExecution(_ context.Context) {
-	e.execution = nil
 }
 
 // skip returns whether the config items are left alone for this execution: they are only

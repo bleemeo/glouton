@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/bleemeo/bleemeo-go"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/executiontest"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
@@ -91,20 +92,13 @@ type fakeState struct {
 
 func (fakeState) BleemeoCredentials() (string, string) { return testAgentID, "password" }
 
-// fakeExecution gives the client and the State to the entity, and records whether it requested
-// its own full synchronization. Any other call panics.
+// fakeExecution gives the client and the State to the entity, and records the synchronizations
+// it requests. Any other call panics.
 type fakeExecution struct {
-	types.SynchronizationExecution
+	executiontest.Recorder
 
 	client        *fakeClient
 	onlyEssential bool
-	requestedFull bool
-}
-
-func (e *fakeExecution) RequestSynchronization(entityName types.EntityName, requestFull bool) {
-	if entityName == types.EntityGloutonConfig && requestFull {
-		e.requestedFull = true
-	}
 }
 
 func (e *fakeExecution) BleemeoAPIClient() types.Client { return e.client }
@@ -133,13 +127,16 @@ func run(t *testing.T, s *SyncGloutonConfig, execution *fakeExecution, syncType 
 		t.Fatal(err)
 	}
 
-	if execution.requestedFull {
+	// The entity only requests itself in full.
+	requestedFull := execution.Requested[types.EntityGloutonConfig]
+
+	if requestedFull {
 		syncType = types.SyncTypeForceCacheRefresh
 	} else if need && syncType == types.SyncTypeNone {
 		syncType = types.SyncTypeNormal
 	}
 
-	need = need || execution.requestedFull
+	need = need || requestedFull
 
 	if syncType == types.SyncTypeNone {
 		return need, nil

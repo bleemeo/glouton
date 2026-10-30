@@ -27,6 +27,7 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/executiontest"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
@@ -309,20 +310,18 @@ type laterRequest struct {
 // fakeExecution gives the client and the blackbox configuration to the entity, and records the
 // synchronizations it requests. Any other call panics.
 type fakeExecution struct {
-	types.SynchronizationExecution
+	executiontest.Recorder
 
 	client          *fakeClient
 	blackboxEnabled bool
 
-	requested map[types.EntityName]bool
-	later     []laterRequest
+	later []laterRequest
 }
 
 func newFakeExecution(monitors ...bleemeoTypes.Monitor) *fakeExecution {
 	return &fakeExecution{
 		client:          &fakeClient{monitors: monitors},
 		blackboxEnabled: true,
-		requested:       make(map[types.EntityName]bool),
 	}
 }
 
@@ -330,10 +329,6 @@ func (e *fakeExecution) BleemeoAPIClient() types.Client { return e.client }
 
 func (e *fakeExecution) Option() types.Option {
 	return types.Option{Config: config.Config{Blackbox: config.Blackbox{Enable: e.blackboxEnabled}}}
-}
-
-func (e *fakeExecution) RequestSynchronization(entityName types.EntityName, requestFull bool) {
-	e.requested[entityName] = requestFull
 }
 
 func (e *fakeExecution) RequestLaterSynchronization(entityName types.EntityName, requestFull bool, delay time.Duration) {
@@ -452,7 +447,7 @@ func TestManyUpdatesListMonitors(t *testing.T) {
 		t.Errorf("ListMonitors called %d times and GetMonitorByID %d times, want 1 and 0", execution.client.listCount, execution.client.getCount)
 	}
 
-	if _, ok := execution.requested[types.EntityMetric]; !ok {
+	if _, ok := execution.Requested[types.EntityMetric]; !ok {
 		t.Error("the metrics synchronization wasn't requested")
 	}
 
@@ -530,7 +525,7 @@ func TestMissingProbeConfig(t *testing.T) {
 		t.Fatalf("SyncRemoteAndLocal() = %v, want %v", err, errMissingAccountConf)
 	}
 
-	if full, ok := execution.requested[types.EntityConfig]; !ok || !full {
+	if full, ok := execution.Requested[types.EntityConfig]; !ok || !full {
 		t.Error("the configuration synchronization, with a cache refresh, wasn't requested")
 	}
 

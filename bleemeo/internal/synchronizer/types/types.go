@@ -225,9 +225,9 @@ type SynchronizationExecution interface {
 	// If called later, once SyncRemote starts being called, it will be run during *next* execution.
 	RequestSynchronization(entityName EntityName, requestFull bool)
 	// RequestLinkedSynchronization ask for an execution of synchronization of the specified entity,
-	// if another entity will be synchronized. This is better than using IsSynchronizationRequested,
-	// because if later something requests synchronization of the other entity, it will be updated.
-	// For example, RequestSynchronization(EntityApplication, EntityService) will
+	// if another entity will be synchronized. If later something requests synchronization of the
+	// other entity, the specified entity is requested too.
+	// For example, RequestLinkedSynchronization(EntityApplication, EntityService) will
 	// cause the synchronization of application if services are synchronized. This doesn't imply the other way.
 	// This function could only be called during NeedSynchronization.
 	RequestLinkedSynchronization(targetEntityName EntityName, triggerEntityName EntityName) error
@@ -243,9 +243,6 @@ type SynchronizationExecution interface {
 	// RequestLaterFullSynchronization ask for a full synchronization to occur within delay. It might happen earlier.
 	// Prefer RequestSynchronizationForAll if you need a very soon synchronization.
 	RequestLaterFullSynchronization(delay time.Duration)
-	// IsSynchronizationRequested return whether a synchronization was requested for the
-	// specific entity during the current execution.
-	IsSynchronizationRequested(entityName EntityName) bool
 	RequestUpdateThresholds()
 	RequestNotifyLabelsUpdate()
 	Option() Option

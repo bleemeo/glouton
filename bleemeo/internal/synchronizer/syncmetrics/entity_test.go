@@ -25,6 +25,7 @@ import (
 
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/executiontest"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
@@ -72,30 +73,13 @@ func (c *fakeClient) SetMetricActive(_ context.Context, id string, active bool) 
 // fakeExecution gives the times and the client to the entity, and records the synchronizations
 // it requests. Any other call panics.
 type fakeExecution struct {
-	types.SynchronizationExecution
+	executiontest.Recorder
 
 	lastSuccessfulSync time.Time
-
-	linked    [][2]types.EntityName
-	requested map[types.EntityName]bool
 }
 
 func (e *fakeExecution) StartedAt() time.Time          { return testNow() }
 func (e *fakeExecution) LastSuccessfulSync() time.Time { return e.lastSuccessfulSync }
-
-func (e *fakeExecution) RequestLinkedSynchronization(target types.EntityName, trigger types.EntityName) error {
-	e.linked = append(e.linked, [2]types.EntityName{target, trigger})
-
-	return nil
-}
-
-func (e *fakeExecution) RequestSynchronization(entityName types.EntityName, requestFull bool) {
-	if e.requested == nil {
-		e.requested = make(map[types.EntityName]bool)
-	}
-
-	e.requested[entityName] = requestFull
-}
 
 // newExecution returns an execution of a new entity, which last synchronized at lastSync.
 func newExecution(option types.Option, lastSync time.Time) (*syncMetricsExecution, *fakeExecution) {
@@ -162,7 +146,7 @@ func TestNeedSynchronization(t *testing.T) {
 				{types.EntityMetric, types.EntityContainer},
 				{types.EntityMetric, types.EntityMonitor},
 			}
-			if diff := cmp.Diff(want, execution.linked); diff != "" {
+			if diff := cmp.Diff(want, execution.Linked); diff != "" {
 				t.Errorf("linked synchronizations mismatch (-want +got)\n%s", diff)
 			}
 		})
@@ -222,7 +206,7 @@ func TestPendingUpdateRequeued(t *testing.T) {
 		t.Errorf("pending updates mismatch (-want +got)\n%s", diff)
 	}
 
-	if full, ok := execution.requested[types.EntityMetric]; !ok || full {
+	if full, ok := execution.Requested[types.EntityMetric]; !ok || full {
 		t.Errorf("metric synchronization requested = %v (full %v), want a normal one", ok, full)
 	}
 }

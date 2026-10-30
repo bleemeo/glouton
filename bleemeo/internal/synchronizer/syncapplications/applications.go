@@ -36,9 +36,9 @@ var ErrApplicationFirst = errors.New("application need to be created before serv
 
 var errApplicationNotAllowed = errors.New("applications aren't allowed in the current plan")
 
-type SyncApplications struct {
-	currentExecution types.SynchronizationExecution
-}
+// SyncApplications creates the applications of the discovered services. It keeps no state
+// across executions.
+type SyncApplications struct{}
 
 func New() *SyncApplications {
 	return &SyncApplications{}
@@ -57,29 +57,23 @@ func (s *SyncApplications) EnabledInSuspendedMode() bool {
 }
 
 func (s *SyncApplications) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
-	s.currentExecution = execution
-
-	return s, nil
+	return &syncApplicationsExecution{execution: execution}, nil
 }
 
-func (s *SyncApplications) NeedSynchronization(_ context.Context) (bool, error) {
-	if s.currentExecution == nil {
-		return false, fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
-	}
+type syncApplicationsExecution struct {
+	execution types.SynchronizationExecution
+}
 
+func (e *syncApplicationsExecution) NeedSynchronization(_ context.Context) (bool, error) {
 	// Same synchronization criteria as Services.
-	return false, s.currentExecution.RequestLinkedSynchronization(types.EntityApplication, types.EntityService)
+	return false, e.execution.RequestLinkedSynchronization(types.EntityApplication, types.EntityService)
 }
 
-func (s *SyncApplications) RefreshCache(ctx context.Context, syncType types.SyncType) error {
-	if s.currentExecution == nil {
-		return fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
-	}
-
+func (e *syncApplicationsExecution) RefreshCache(ctx context.Context, syncType types.SyncType) error {
 	if syncType == types.SyncTypeForceCacheRefresh {
-		err := refreshCache(ctx, s.currentExecution.BleemeoAPIClient(), s.currentExecution.Option().Cache)
+		err := refreshCache(ctx, e.execution.BleemeoAPIClient(), e.execution.Option().Cache)
 		if err != nil {
-			s.currentExecution.FailOtherEntity(types.EntityService, ErrApplicationFirst)
+			e.execution.FailOtherEntity(types.EntityService, ErrApplicationFirst)
 
 			return err
 		}
@@ -88,31 +82,25 @@ func (s *SyncApplications) RefreshCache(ctx context.Context, syncType types.Sync
 	return nil
 }
 
-func (s *SyncApplications) SyncRemoteAndLocal(ctx context.Context, syncType types.SyncType) error {
-	_ = syncType
-
-	if s.currentExecution == nil {
-		return fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
-	}
-
-	cache := s.currentExecution.Option().Cache
+func (e *syncApplicationsExecution) SyncRemoteAndLocal(ctx context.Context, _ types.SyncType) error {
+	cache := e.execution.Option().Cache
 	if cfg, ok := cache.CurrentAccountConfig(); !ok || !cfg.ApplicationIntegration {
 		return nil
 	}
 
-	localServices, _ := s.currentExecution.Option().Discovery.GetLatestDiscovery()
+	localServices, _ := e.execution.Option().Discovery.GetLatestDiscovery()
 
-	err := syncRemoteAndLocal(ctx, localServices, s.currentExecution.BleemeoAPIClient(), cache)
+	err := syncRemoteAndLocal(ctx, localServices, e.execution.BleemeoAPIClient(), cache)
 	if errors.Is(err, errApplicationNotAllowed) {
 		// Our account config is outdated, refresh it so we stop trying to create applications.
 		logger.V(1).Printf("Skip creation of applications: %v", err)
-		s.currentExecution.RequestSynchronization(types.EntityConfig, true)
+		e.execution.RequestSynchronization(types.EntityConfig, true)
 
 		return nil
 	}
 
 	if err != nil {
-		s.currentExecution.FailOtherEntity(types.EntityService, ErrApplicationFirst)
+		e.execution.FailOtherEntity(types.EntityService, ErrApplicationFirst)
 
 		return err
 	}
@@ -120,8 +108,7 @@ func (s *SyncApplications) SyncRemoteAndLocal(ctx context.Context, syncType type
 	return nil
 }
 
-func (s *SyncApplications) FinishExecution(_ context.Context) {
-	s.currentExecution = nil
+func (e *syncApplicationsExecution) FinishExecution(_ context.Context) {
 }
 
 func refreshCache(ctx context.Context, apiClient types.ApplicationClient, cache *cache.Cache) error {
