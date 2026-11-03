@@ -21,6 +21,7 @@ package syncagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync/atomic"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
@@ -30,6 +31,10 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	gloutonTypes "github.com/bleemeo/glouton/types"
 )
+
+// ErrAgentListFirst fails the SNMP and vSphere synchronizations when the agents of the account
+// couldn't be listed.
+var ErrAgentListFirst = errors.New("the agents need to be listed before registering SNMP and vSphere agents")
 
 // SyncAgent updates the tags of the agent, and lists the agents of the account on full
 // synchronizations.
@@ -100,6 +105,12 @@ func (e *syncAgentExecution) RefreshCache(ctx context.Context, syncType types.Sy
 
 	deleted, err := updateAgentList(ctx, e.execution.BleemeoAPIClient(), e.execution.Option().Cache)
 	if err != nil {
+		// SNMP and vSphere look for the agents of their targets in this list, and register
+		// an agent for each target they don't find there. With a stale list, they would
+		// register a duplicate of an agent the API already has.
+		e.execution.FailOtherEntity(types.EntitySNMP, ErrAgentListFirst)
+		e.execution.FailOtherEntity(types.EntityVSphere, ErrAgentListFirst)
+
 		return err
 	}
 

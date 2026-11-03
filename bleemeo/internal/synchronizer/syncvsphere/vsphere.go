@@ -61,7 +61,7 @@ type SyncVSphere struct {
 	state   bleemeoTypes.State
 	devices func(ctx context.Context, maxAge time.Duration) []bleemeoTypes.VSphereDevice
 	now     func() time.Time
-	// lastChange is the last change of the devices synchronized.
+	// lastChange is the last change of the devices on the last successful synchronization.
 	lastChange      time.Time
 	lastAgentsPurge time.Time
 }
@@ -96,23 +96,38 @@ type syncVSphereExecution struct {
 	execution types.SynchronizationExecution
 }
 
-// NeedSynchronization synchronizes the vSphere agents when the devices changed.
+// NeedSynchronization synchronizes the vSphere agents when the devices changed. SyncRemoteAndLocal
+// only updates lastChange once it succeeds, so a failed synchronization is retried on the next
+// execution.
 func (e *syncVSphereExecution) NeedSynchronization(ctx context.Context) (bool, error) {
-	lastChange := e.execution.Option().LastVSphereChange(ctx)
-	if !lastChange.After(e.parent.lastChange) {
-		return false, nil
-	}
-
-	e.parent.lastChange = lastChange
-
-	return true, nil
+	return e.execution.Option().LastVSphereChange(ctx).After(e.parent.lastChange), nil
 }
 
+// RefreshCache does nothing: the vSphere agents are in the agent list of the cache, which
+// EntityAgent refreshes, before this entity, on full synchronizations. A failed full
+// synchronization is retried on the next execution, so this entity always runs on an agent
+// list from a successful refresh. When the refresh fails, EntityAgent fails this entity
+// rather than letting it register duplicates of the agents missing from the list.
 func (e *syncVSphereExecution) RefreshCache(_ context.Context, _ types.SyncType) error {
 	return nil
 }
 
+// SyncRemoteAndLocal registers and purges the vSphere agents, and updates lastChange when it
+// succeeds.
 func (e *syncVSphereExecution) SyncRemoteAndLocal(ctx context.Context, _ types.SyncType) error {
+	// Read before listing the devices: a change meanwhile is synchronized on the next execution.
+	lastChange := e.execution.Option().LastVSphereChange(ctx)
+
+	if err := e.syncRemoteAndLocal(ctx); err != nil {
+		return err
+	}
+
+	e.parent.lastChange = lastChange
+
+	return nil
+}
+
+func (e *syncVSphereExecution) syncRemoteAndLocal(ctx context.Context) error {
 	option := e.execution.Option()
 
 	cfg, ok := option.Cache.CurrentAccountConfig()

@@ -18,6 +18,7 @@ package syncvsphere
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -37,13 +38,23 @@ const vmTypeID = "vm-type"
 
 var t0 = time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC) //nolint:gochecknoglobals
 
-// fakeClient registers the agents with the ID of their FQDN, and records the deleted agents.
+var errRegister = errors.New("register failed")
+
+// fakeClient registers the agents with the ID of their FQDN, or fails with err, and records the
+// deleted agents. Any other call panics.
 type fakeClient struct {
+	types.Client
+
 	registered []string
 	deleted    []string
+	err        error
 }
 
 func (c *fakeClient) RegisterVSphereAgent(_ context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
+	if c.err != nil {
+		return bleemeoTypes.Agent{}, c.err
+	}
+
 	c.registered = append(c.registered, payload.FQDN)
 
 	payload.ID = payload.FQDN
@@ -57,16 +68,25 @@ func (c *fakeClient) DeleteAgent(_ context.Context, id string) error {
 	return nil
 }
 
-// fakeExecution gives the date of the last change of the devices to the entity. Any other call
-// panics.
+// fakeExecution gives the date of the last change of the devices, the client and the cache to
+// the entity. Any other call panics.
 type fakeExecution struct {
 	types.SynchronizationExecution
 
 	lastChange time.Time
+	client     *fakeClient
+	cache      *cache.Cache
 }
 
+func (e *fakeExecution) BleemeoAPIClient() types.Client { return e.client }
+func (e *fakeExecution) IsOnlyEssential() bool          { return false }
+
 func (e *fakeExecution) Option() types.Option {
-	return types.Option{LastVSphereChange: func(context.Context) time.Time { return e.lastChange }}
+	return types.Option{
+		LastVSphereChange:       func(context.Context) time.Time { return e.lastChange },
+		VSphereEndpointsInError: func() map[string]bool { return nil },
+		Cache:                   e.cache,
+	}
 }
 
 // vm is a vSphere VM of the endpoint source, whose FQDN is its MOID.
@@ -268,28 +288,61 @@ func TestPurgeInterval(t *testing.T) {
 	}
 }
 
-// TestNeedSynchronization checks the vSphere agents are synchronized when the devices change.
+// TestNeedSynchronization checks the vSphere agents are synchronized when the devices change,
+// and that a failed synchronization is retried.
 func TestNeedSynchronization(t *testing.T) {
 	t.Parallel()
 
+	const accountID = "account-id"
+
 	e := newEntity(t)
+	e.localDevices = []bleemeoTypes.VSphereDevice{vm{moid: "web", source: "vcenter-1"}}
+
+	// The account has the vSphere integration, which needs a configuration of a vSphere agent.
+	e.cache.SetAccountID(accountID)
+	e.cache.SetConfigs([]bleemeoTypes.Config{
+		{Type: bleemeoTypes.ConfigTypeVSphereIntegration, Account: accountID, Value: true},
+		{Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: "agent-type", Value: float64(10)},
+		{Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: vmTypeID, Value: float64(60)},
+	})
 
 	for _, step := range []struct {
+		name       string
 		lastChange time.Time
+		failing    bool
 		want       bool
 	}{
-		{lastChange: time.Time{}, want: false},
-		{lastChange: t0, want: true},
-		{lastChange: t0, want: false},
-		{lastChange: t0.Add(time.Minute), want: true},
+		{name: "no change", lastChange: time.Time{}, want: false},
+		{name: "change, registration failing", lastChange: t0, failing: true, want: true},
+		{name: "retry", lastChange: t0, want: true},
+		{name: "unchanged", lastChange: t0, want: false},
+		{name: "new change", lastChange: t0.Add(time.Minute), want: true},
 	} {
-		execution, err := e.PrepareExecution(t.Context(), &fakeExecution{lastChange: step.lastChange})
+		e.client.err = nil
+		if step.failing {
+			e.client.err = errRegister
+		}
+
+		execution, err := e.PrepareExecution(t.Context(), &fakeExecution{lastChange: step.lastChange, client: e.client, cache: e.cache})
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if need, err := execution.NeedSynchronization(t.Context()); err != nil || need != step.want {
-			t.Errorf("last change %v: NeedSynchronization() = %v, %v, want %v", step.lastChange, need, err, step.want)
+		need, err := execution.NeedSynchronization(t.Context())
+		if err != nil || need != step.want {
+			t.Errorf("%s: NeedSynchronization() = %v, %v, want %v", step.name, need, err, step.want)
 		}
+
+		if !need {
+			continue
+		}
+
+		if err := execution.SyncRemoteAndLocal(t.Context(), types.SyncTypeNormal); (err != nil) != step.failing {
+			t.Errorf("%s: SyncRemoteAndLocal() = %v, want failure %v", step.name, err, step.failing)
+		}
+	}
+
+	if diff := cmp.Diff([]string{"web"}, e.client.registered); diff != "" {
+		t.Errorf("registered agents mismatch (-want +got)\n%s", diff)
 	}
 }
