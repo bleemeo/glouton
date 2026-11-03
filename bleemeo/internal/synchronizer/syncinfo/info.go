@@ -50,9 +50,10 @@ import (
 )
 
 const (
-	// outdatedAfter is the age after which the global information is fetched again, when the
-	// synchronizer runs anyway.
-	outdatedAfter = 30 * time.Minute
+	// syncInterval is the maximum delay between two synchronizations of info. Each one writes a
+	// time_drift point, and a metric without points for 70 minutes is deactivated: syncInterval
+	// is slightly shorter, so time_drift always has a point recent enough.
+	syncInterval = 60 * time.Minute
 	// maintenancePollInterval is the minimum delay between two polls of the maintenance mode,
 	// while MQTT isn't connected.
 	maintenancePollInterval = 15 * time.Minute
@@ -94,6 +95,8 @@ type SyncInfo struct {
 	// timeDriftMarked is set once agent_status is marked critical for the time drift, and
 	// cleared when the time drift isn't too large anymore.
 	timeDriftMarked bool
+	// lastSyncAt is when info was last synchronized, whether the fetch succeeded or not.
+	lastSyncAt time.Time
 	// lastMaintenanceSync is when the maintenance mode was last polled. While MQTT isn't
 	// connected, no notification tells the end of the maintenance: info polls it every 15
 	// minutes. For instance, an agent started during a maintenance can't register agent_status,
@@ -124,19 +127,6 @@ func (s *SyncInfo) EnabledInSuspendedMode() bool {
 	return false
 }
 
-// NeedSynchronizationWhileSkipped returns whether the maintenance should be polled, like
-// NeedSynchronization, while info is skipped in suspended mode. The poll stays requested, and
-// info runs on the first execution after the suspension.
-func (s *SyncInfo) NeedSynchronizationWhileSkipped(_ context.Context, execution types.SynchronizationExecution) bool {
-	return s.needMaintenancePoll(execution)
-}
-
-// NeedSynchronizationWithOthers returns whether info is outdated: it is then synchronized when
-// the execution synchronizes other entities.
-func (s *SyncInfo) NeedSynchronizationWithOthers() bool {
-	return s.isOutdated()
-}
-
 func (s *SyncInfo) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
 	return &syncInfoExecution{
 		parent:    s,
@@ -150,17 +140,6 @@ func (s *SyncInfo) LastInfo() bleemeoTypes.GlobalInfo {
 	defer s.l.Unlock()
 
 	return s.lastInfo
-}
-
-// isOutdated returns whether the global information should be fetched again, when the
-// synchronizer runs anyway. Keeping it recent detects a change on /v1/info/ quickly, and keeps
-// the time_drift metric recent enough to avoid its deactivation.
-func (s *SyncInfo) isOutdated() bool {
-	s.l.Lock()
-	fetchedAt := s.lastInfo.FetchedAt
-	s.l.Unlock()
-
-	return s.now().Sub(fetchedAt) > outdatedAfter
 }
 
 // SetMQTTConnected records whether MQTT is connected. It returns true when MQTT is reported
@@ -199,6 +178,7 @@ func (s *SyncInfo) DiagnosticArchive(_ context.Context, archive gloutonTypes.Arc
 		MQTTDisconnected       bool
 		ShouldUpdateMQTTStatus bool
 		TimeDriftMarked        bool
+		LastSyncAt             time.Time
 	}{
 		LastInfo:               s.lastInfo,
 		LastInfoFetchedAt:      s.lastInfo.FetchedAt,
@@ -206,6 +186,7 @@ func (s *SyncInfo) DiagnosticArchive(_ context.Context, archive gloutonTypes.Arc
 		MQTTDisconnected:       s.mqttDisconnected,
 		ShouldUpdateMQTTStatus: s.shouldUpdateMQTTStatus,
 		TimeDriftMarked:        s.timeDriftMarked,
+		LastSyncAt:             s.lastSyncAt,
 	}
 
 	enc := json.NewEncoder(file)
@@ -223,14 +204,20 @@ type syncInfoExecution struct {
 	fetched    bool
 }
 
-// NeedSynchronization polls the maintenance mode while MQTT can't tell when it ends.
-// Otherwise, info is synchronized on request, on full synchronizations, and with other entities
-// when it is outdated.
+// NeedSynchronization returns whether info should be synchronized: at least every hour, and every
+// 15 minutes to poll the maintenance mode while MQTT can't tell when it ends. Info is also
+// synchronized on request and on full synchronizations.
 func (e *syncInfoExecution) NeedSynchronization(_ context.Context) (bool, error) {
-	return e.parent.needMaintenancePoll(e.execution), nil
+	pollMaintenance := e.parent.needMaintenancePoll(e.execution)
+
+	return pollMaintenance || e.parent.needPeriodicSync(e.execution), nil
 }
 
 func (e *syncInfoExecution) RefreshCache(ctx context.Context, _ types.SyncType) error {
+	e.parent.l.Lock()
+	e.parent.lastSyncAt = e.execution.StartedAt()
+	e.parent.l.Unlock()
+
 	e.globalInfo, e.fetched = e.parent.fetch(ctx, e.execution)
 
 	return nil
@@ -266,6 +253,14 @@ func (s *SyncInfo) needMaintenancePoll(execution types.SynchronizationExecution)
 	s.lastMaintenanceSync = startedAt
 
 	return true
+}
+
+// needPeriodicSync returns whether info was last synchronized syncInterval ago or more.
+func (s *SyncInfo) needPeriodicSync(execution types.SynchronizationExecution) bool {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return execution.StartedAt().Sub(s.lastSyncAt) >= syncInterval
 }
 
 // fetch returns the global information. It returns false when it couldn't be fetched: the

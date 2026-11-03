@@ -320,10 +320,6 @@ func (e *Execution) run(ctx context.Context) error {
 		compatibilitySyncToPerform(ctx, e, e.synchronizer.state)
 
 		e.applyNeedSynchronization(ctx)
-
-		if e.hadWork() {
-			e.applyNeedSynchronizationWithOthers()
-		}
 	}
 
 	e.checkLinkedSynchronization()
@@ -479,28 +475,6 @@ func (e *Execution) applyNeedSynchronization(ctx context.Context) {
 			}
 		}
 	})
-
-	// The skipped entities keep errSkippedExecution: what they need is requested again at the
-	// end of the execution.
-	for idx := range e.entities {
-		ee := &e.entities[idx]
-
-		entity, ok := ee.entity.(types.NeedSynchronizationWhileSkipped)
-		if ok && errors.Is(ee.err, errSkippedExecution) && entity.NeedSynchronizationWhileSkipped(ctx, e) && ee.syncType == types.SyncTypeNone {
-			ee.syncType = types.SyncTypeNormal
-		}
-	}
-}
-
-// applyNeedSynchronizationWithOthers requests the entities that need a synchronization when the
-// execution synchronizes other entities.
-func (e *Execution) applyNeedSynchronizationWithOthers() {
-	for _, ee := range e.entities {
-		entity, ok := ee.entity.(types.NeedSynchronizationWithOthers)
-		if ok && ee.syncType == types.SyncTypeNone && entity.NeedSynchronizationWithOthers() {
-			e.RequestSynchronization(ee.entity.Name(), false)
-		}
-	}
 }
 
 func (e *Execution) checkLinkedSynchronization() {

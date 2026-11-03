@@ -518,9 +518,9 @@ func TestAPICallsBeforeFirstExecution(t *testing.T) {
 	}
 }
 
-// TestMaintenancePolledWhileSuspended checks the maintenance is polled in suspended mode too:
-// info is requested, and stays requested until it can run.
-func TestMaintenancePolledWhileSuspended(t *testing.T) {
+// TestMaintenancePolledAfterSuspension checks the maintenance isn't polled in suspended mode, and
+// is polled on the first execution after the suspension.
+func TestMaintenancePolledAfterSuspension(t *testing.T) {
 	t.Parallel()
 
 	helper := newHelper(t)
@@ -534,29 +534,38 @@ func TestMaintenancePolledWhileSuspended(t *testing.T) {
 	}
 
 	helper.s.SetMaintenance(t.Context(), true)
-	helper.s.SetSuspended(true)
 
-	for _, name := range []string{"polled", "requested again"} {
+	for _, step := range []struct {
+		name      string
+		suspended bool
+		want      types.SyncType
+		wantCalls int
+	}{
+		{name: "suspended", suspended: true},
+		{name: "still suspended", suspended: true},
+		{name: "suspension ended", want: types.SyncTypeNormal, wantCalls: 1},
+	} {
+		helper.s.SetSuspended(step.suspended)
 		helper.AddTime(time.Minute)
 
 		result := helper.runOnceWithResult(t)
 		if result.err != nil {
-			t.Fatalf("%s: runOnce failed: %v", name, result.err)
+			t.Fatalf("%s: runOnce failed: %v", step.name, result.err)
 		}
 
-		if got := result.syncPerEntity[types.EntityInfo]; got != types.SyncTypeNormal {
-			t.Errorf("%s: info sync type = %v, want %v", name, got, types.SyncTypeNormal)
+		if got := result.syncPerEntity[types.EntityInfo]; got != step.want {
+			t.Errorf("%s: info sync type = %v, want %v", step.name, got, step.want)
 		}
 
-		if got := helper.wrapperClientMock.methodCounts["GetGlobalInfo"]; got != 0 {
-			t.Errorf("%s: GetGlobalInfo called %d times, want 0 (info is skipped)", name, got)
+		if got := helper.wrapperClientMock.methodCounts["GetGlobalInfo"]; got != step.wantCalls {
+			t.Errorf("%s: GetGlobalInfo called %d times, want %d", step.name, got, step.wantCalls)
 		}
 	}
 }
 
-// TestInfoSynchronizedWithOthers checks info is synchronized when it is older than 30 minutes
-// and the execution synchronizes other entities, and only then.
-func TestInfoSynchronizedWithOthers(t *testing.T) {
+// TestInfoSynchronizedHourly checks info is synchronized every hour, even when nothing else is,
+// so time_drift gets a point before its deactivation.
+func TestInfoSynchronizedHourly(t *testing.T) {
 	t.Parallel()
 
 	helper := newHelper(t)
@@ -569,21 +578,19 @@ func TestInfoSynchronizedWithOthers(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// No full synchronization, which synchronizes info too.
+	helper.s.nextFullSync = helper.Now().Add(24 * time.Hour)
+
 	for _, step := range []struct {
-		name      string
-		elapsed   time.Duration
-		otherWork bool
-		want      types.SyncType
+		name    string
+		elapsed time.Duration
+		want    types.SyncType
 	}{
-		{name: "outdated, no other work", elapsed: 31 * time.Minute},
-		{name: "outdated, other work", otherWork: true, want: types.SyncTypeNormal},
-		{name: "recent, other work", elapsed: time.Minute, otherWork: true},
+		{name: "59 minutes", elapsed: 59 * time.Minute},
+		{name: "1 hour", elapsed: time.Minute, want: types.SyncTypeNormal},
+		{name: "1 minute after", elapsed: time.Minute},
 	} {
 		helper.AddTime(step.elapsed)
-
-		if step.otherWork {
-			helper.s.UpdateK8SAgentList()
-		}
 
 		result := helper.runOnceWithResult(t)
 		if result.err != nil {

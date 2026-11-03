@@ -262,6 +262,8 @@ func TestMaintenancePolling(t *testing.T) {
 
 	start := newTestClock().now
 	s := newEntity(&fakeClock{now: start})
+	// Info was just synchronized: only the maintenance poll may need a synchronization.
+	s.lastSyncAt = start
 
 	for _, step := range []struct {
 		name          string
@@ -297,6 +299,51 @@ func TestMaintenancePolling(t *testing.T) {
 	}
 }
 
+// TestPeriodicSync checks info is synchronized every hour, counting from the last
+// synchronization, even when its fetch failed.
+func TestPeriodicSync(t *testing.T) {
+	t.Parallel()
+
+	start := newTestClock().now
+	s := newEntity(&fakeClock{now: start})
+
+	for _, step := range []struct {
+		name      string
+		startedAt time.Time
+		run       bool
+		fetchErr  error
+		want      bool
+	}{
+		{name: "never synchronized", startedAt: start, run: true, want: true},
+		{name: "59 minutes after", startedAt: start.Add(59 * time.Minute)},
+		{name: "1 hour after", startedAt: start.Add(time.Hour), run: true, fetchErr: errAPIDown, want: true},
+		{name: "59 minutes after a failure", startedAt: start.Add(time.Hour + 59*time.Minute)},
+		{name: "1 hour after a failure", startedAt: start.Add(2 * time.Hour), want: true},
+	} {
+		execution := newFakeExecution(bleemeoTypes.GlobalInfo{})
+		execution.startedAt = step.startedAt
+		execution.client.err = step.fetchErr
+
+		e, err := s.PrepareExecution(t.Context(), execution)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := e.NeedSynchronization(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got != step.want {
+			t.Errorf("%s: NeedSynchronization() = %v, want %v", step.name, got, step.want)
+		}
+
+		if step.run {
+			run(t, s, execution)
+		}
+	}
+}
+
 // TestApplyMaintenance checks the maintenance mode is set from the global information, and
 // that nothing is applied when it couldn't be fetched.
 func TestApplyMaintenance(t *testing.T) {
@@ -312,16 +359,6 @@ func TestApplyMaintenance(t *testing.T) {
 
 	if got := s.LastInfo().FetchedAt; !got.Equal(clock.now) {
 		t.Errorf("LastInfo().FetchedAt = %v, want %v", got, clock.now)
-	}
-
-	if s.NeedSynchronizationWithOthers() {
-		t.Error("NeedSynchronizationWithOthers() = true just after a fetch, want false")
-	}
-
-	clock.now = clock.now.Add(time.Hour)
-
-	if !s.NeedSynchronizationWithOthers() {
-		t.Error("NeedSynchronizationWithOthers() = false after an hour, want true")
 	}
 
 	execution = newFakeExecution(bleemeoTypes.GlobalInfo{})

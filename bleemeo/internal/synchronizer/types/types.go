@@ -152,19 +152,6 @@ type EntitySynchronizer interface {
 	PrepareExecution(ctx context.Context, execution SynchronizationExecution) (EntitySynchronizerExecution, error)
 }
 
-// NeedSynchronizationWhileSkipped is implemented by the entity synchronizers that may need a
-// synchronization while they are skipped, in maintenance or suspended mode. The entity stays
-// skipped: the synchronization is requested again until an execution where it can run.
-type NeedSynchronizationWhileSkipped interface {
-	NeedSynchronizationWhileSkipped(ctx context.Context, execution SynchronizationExecution) bool
-}
-
-// NeedSynchronizationWithOthers is implemented by the entity synchronizers that may need a
-// synchronization when the execution synchronizes other entities anyway.
-type NeedSynchronizationWithOthers interface {
-	NeedSynchronizationWithOthers() bool
-}
-
 // DiagnosticArchiver is implemented by the entity synchronizers that add their state to the
 // diagnostic archive. It may be called from another goroutine than the synchronization.
 type DiagnosticArchiver interface {
