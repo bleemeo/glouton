@@ -53,6 +53,7 @@ import (
 	"github.com/containerd/typeurl/v2"
 	"github.com/mitchellh/copystructure"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/process"
 )
@@ -258,6 +259,8 @@ func (c *Containerd) Metrics(ctx context.Context, now time.Time) ([]types.Metric
 
 	idPerNamespace := make(map[string][]string)
 	gloutonIDToName := make(map[string]string)
+	gloutonIDToNetNamespace := make(map[string]string)
+	netNamespacePIDs := make(map[string][]int)
 
 	c.l.Lock()
 
@@ -266,12 +269,32 @@ func (c *Containerd) Metrics(ctx context.Context, now time.Time) ([]types.Metric
 			idPerNamespace[cont.namespace] = append(idPerNamespace[cont.namespace], "id=="+cont.info.ID)
 
 			gloutonIDToName[cont.ID()] = cont.ContainerName()
+
+			if cont.netNamespace == netNamespaceIsolated {
+				key := cont.netNamespaceKey()
+				gloutonIDToNetNamespace[cont.ID()] = key
+				netNamespacePIDs[key] = append(netNamespacePIDs[key], cont.pid)
+			}
 		}
 	}
 
 	c.l.Unlock()
 
 	newValues := make([]metricValue, 0, len(gloutonIDToName))
+
+	// Each network namespace is read once, through the first of its containers whose PID can be read:
+	// one of them may have exited since the cache refresh.
+	netTrafficByNamespace := make(map[string]netTraffic, len(netNamespacePIDs))
+
+	for key, pids := range netNamespacePIDs {
+		for _, pid := range pids {
+			if traffic := netTrafficFromProc(pid, c.hostRoot); traffic.found {
+				netTrafficByNamespace[key] = traffic
+
+				break
+			}
+		}
+	}
 
 	for ns, ids := range idPerNamespace {
 		ctx := namespaces.WithNamespace(ctx, ns)
@@ -298,6 +321,11 @@ func (c *Containerd) Metrics(ctx context.Context, now time.Time) ([]types.Metric
 				logger.V(2).Printf("unexpected type for metric: %s", metric.GetData().GetTypeUrl())
 
 				continue
+			}
+
+			if traffic, ok := netTrafficByNamespace[gloutonIDToNetNamespace[ns+"/"+metric.GetID()]]; ok {
+				valueMap["container_net_bits_recv"] = traffic.recvBytes * 8
+				valueMap["container_net_bits_sent"] = traffic.sentBytes * 8
 			}
 
 			newValues = append(newValues, metricValue{
@@ -898,16 +926,139 @@ func hasHostNetwork(spec *oci.Spec) bool {
 // Glouton's own namespace rather than the host's -- at best failing, at worst matching an unrelated
 // process that happens to share the number.
 func primaryAddressFromProc(pid int, hostRoot string) string {
-	procPath := filepath.Join(hostRoot, "proc")
-	if hostRoot == "" {
-		procPath = "/proc"
-	}
+	procPath := hostProcPath(hostRoot)
 
 	if address := ipv4LocalAddressFromProc(pid, procPath); address != "" {
 		return address
 	}
 
 	return globalIPv6AddressFromProc(pid, procPath)
+}
+
+// hostProcPath returns where the host's procfs is mounted. An empty hostRoot must resolve to the
+// absolute /proc, not to filepath.Join("", "proc") which is the relative "proc".
+func hostProcPath(hostRoot string) string {
+	if hostRoot == "" {
+		return "/proc"
+	}
+
+	return filepath.Join(hostRoot, "proc")
+}
+
+// netNamespace tells whose network namespace a container's task runs in.
+type netNamespace int
+
+const (
+	// netNamespaceUnknown is used when the task is stopped or its procfs couldn't be read. Nothing
+	// must be read from the task's procfs then: an exited task's PID may have been recycled.
+	netNamespaceUnknown netNamespace = iota
+	// netNamespaceHost is the host's network namespace ("--net host" or a Kubernetes hostNetwork pod).
+	netNamespaceHost
+	// netNamespaceIsolated is a network namespace of the container's own, or of its Kubernetes pod.
+	netNamespaceIsolated
+)
+
+// netNamespaceFromProc tells whether the given PID runs in the host's network namespace.
+//
+// The OCI spec isn't enough to tell: under Kubernetes, the containers of a hostNetwork pod don't
+// omit their network namespace but join the sandbox's one by path, which happens to be the host's.
+// Each network namespace has its own procfs "net" entries, so <procfs>/<pid>/net/dev is the same
+// file as the host init's one exactly when pid is in the host's network namespace -- and unlike
+// <procfs>/<pid>/ns/net, it can be stat'ed without CAP_SYS_PTRACE.
+func netNamespaceFromProc(pid int, hostRoot string) netNamespace {
+	procPath := hostProcPath(hostRoot)
+
+	hostNetDev, err := os.Stat(filepath.Join(procPath, "1", "net", "dev"))
+	if err != nil {
+		logger.V(2).Printf("unable to stat the host network stats: %v", err)
+
+		return netNamespaceUnknown
+	}
+
+	netDev, err := os.Stat(filepath.Join(procPath, strconv.Itoa(pid), "net", "dev"))
+	if err != nil {
+		logger.V(2).Printf("unable to stat network stats of PID %d: %v", pid, err)
+
+		return netNamespaceUnknown
+	}
+
+	if os.SameFile(netDev, hostNetDev) {
+		return netNamespaceHost
+	}
+
+	return netNamespaceIsolated
+}
+
+// netTraffic is the cumulative traffic of a network namespace. found is false when it couldn't be
+// read or has no interface created by the container runtime (e.g. a container started with
+// "--net none"), consistent with Docker which reports no network stats then.
+type netTraffic struct {
+	recvBytes uint64
+	sentBytes uint64
+	found     bool
+}
+
+// netTrafficFromProc reads the traffic of the given PID's network namespace from the world-readable
+// <procfs>/<pid>/net/dev. containerd's task Metrics API only reports cgroup stats, and network isn't
+// a cgroup resource (the cgroup v1 network field is never filled by the runc shim).
+func netTrafficFromProc(pid int, hostRoot string) netTraffic {
+	fs, err := procfs.NewFS(hostProcPath(hostRoot))
+	if err != nil {
+		logger.V(2).Printf("unable to open procfs: %v", err)
+
+		return netTraffic{}
+	}
+
+	proc, err := fs.Proc(pid)
+	if err != nil {
+		logger.V(2).Printf("unable to read network stats of PID %d: %v", pid, err)
+
+		return netTraffic{}
+	}
+
+	netDev, err := proc.NetDev()
+	if err != nil {
+		logger.V(2).Printf("unable to read network stats of PID %d: %v", pid, err)
+
+		return netTraffic{}
+	}
+
+	var traffic netTraffic
+
+	for name, line := range netDev {
+		if !isRuntimeInterface(name) {
+			continue
+		}
+
+		traffic.recvBytes += line.RxBytes
+		traffic.sentBytes += line.TxBytes
+		traffic.found = true
+	}
+
+	return traffic
+}
+
+// isRuntimeInterface reports whether an interface of a container's network namespace was created
+// by the container runtime: the CRI plugin always names the pod's CNI interface "eth0", nerdctl
+// names one interface per network "eth<N>", and Multus names the additional ones "net<N>".
+//
+// Like Docker, which only counts its own endpoints, other interfaces are left out: loopback, and
+// interfaces created from inside the container (e.g. docker0 and veths of a docker:dind service, or
+// the tun0/wg0 of a VPN) whose traffic also crosses the runtime's interfaces and would otherwise be
+// counted twice.
+func isRuntimeInterface(name string) bool {
+	for _, prefix := range []string{"eth", "net"} {
+		index, ok := strings.CutPrefix(name, prefix)
+		if !ok {
+			continue
+		}
+
+		if _, err := strconv.ParseUint(index, 10, 32); err == nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 func ipv4LocalAddressFromProc(pid int, procPath string) string {
@@ -1054,12 +1205,19 @@ func convertToContainerObject(ctx context.Context, ns string, cont client.Contai
 	// keep trying: the PID came from a task that did exist.
 	taskStopped := statusErr == nil && status.Status == client.Stopped
 
-	// Resolved after the status above so the check below can use it. Only the procfs read needs guarding:
+	// Resolved after the status above so the checks below can use it. Only the procfs reads need guarding:
 	// an exited task's Pid() still reports its old PID, which the host may already have recycled for an
-	// unrelated process, and reading that PID's network namespace would report a stranger's address as
-	// this container's. The host-network branch reads no procfs at all, so it is left unconditional.
+	// unrelated process, and reading that PID's network namespace would report a stranger's address or
+	// traffic as this container's. The spec check reads no procfs at all, so it is left unconditional.
 	switch {
 	case hasHostNetwork(&spec):
+		obj.netNamespace = netNamespaceHost
+	case !taskStopped:
+		obj.netNamespace = netNamespaceFromProc(obj.pid, hostRoot)
+	}
+
+	switch {
+	case obj.netNamespace == netNamespaceHost:
 		// Consistent with the Docker runtime: on host networking, the container shares the
 		// host's network namespace and a service is generally only expected to be reachable
 		// through the loopback interface.
@@ -1234,6 +1392,7 @@ type containerObject struct {
 	exitTime       time.Time
 	imageID        string
 	primaryAddress string
+	netNamespace   netNamespace
 }
 
 // ContainerOCISpec contains Info() & unmarshaled oci Spec.
@@ -1397,6 +1556,16 @@ func (c containerObject) StoppedAndReplaced() bool {
 
 func (c containerObject) PID() int {
 	return c.pid
+}
+
+// netNamespaceKey identifies the container's network namespace among the ones of other containers.
+// All the containers of a Kubernetes pod join the network namespace of the pod sandbox.
+func (c containerObject) netNamespaceKey() string {
+	if podUID := c.info.Labels["io.kubernetes.pod.uid"]; podUID != "" {
+		return "pod/" + podUID
+	}
+
+	return c.ID()
 }
 
 func isContainerdRunning() bool {
