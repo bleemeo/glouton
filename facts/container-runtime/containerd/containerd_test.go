@@ -17,7 +17,9 @@
 package containerd
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -32,6 +34,7 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/facts/container-runtime/internal/testutil"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/archivewriter"
 
 	v1 "github.com/containerd/cgroups/v3/cgroup1/stats"
 	v2 "github.com/containerd/cgroups/v3/cgroup2/stats"
@@ -1374,5 +1377,53 @@ func TestContainerdMetricsNetwork(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("network points = %v, want %v", got, want)
+	}
+}
+
+// TestContainerdDiagnosticArchiveNetNamespace checks that the diagnostic archive tells why a container
+// has no network metrics.
+func TestContainerdDiagnosticArchiveNetNamespace(t *testing.T) {
+	c := newWithOpenner(nil, "", nil, func(facts.Container) bool { return false }, nil)
+
+	for _, cont := range []containerObject{
+		{namespace: "k8s.io", info: ContainerOCISpec{Container: containers.Container{ID: "app"}}, pid: 4242, netNamespace: netNamespaceIsolated},
+		{namespace: "k8s.io", info: ContainerOCISpec{Container: containers.Container{ID: "hostnet"}}, pid: 4343, netNamespace: netNamespaceHost},
+		{namespace: "k8s.io", info: ContainerOCISpec{Container: containers.Container{ID: "stopped"}}, pid: 4444},
+	} {
+		c.containers[cont.ID()] = cont
+	}
+
+	var buffer bytes.Buffer
+
+	if err := c.DiagnosticArchive(t.Context(), archivewriter.NewSingleFileWriter("containerd.json", &buffer)); err != nil {
+		t.Fatal("DiagnosticArchive() failed:", err)
+	}
+
+	var archive struct {
+		Containers []struct {
+			ID           string
+			PID          int
+			NetNamespace string
+		}
+	}
+
+	if err := json.Unmarshal(buffer.Bytes(), &archive); err != nil {
+		t.Fatal("Can't decode containerd.json:", err)
+	}
+
+	got := make(map[string]string)
+
+	for _, cont := range archive.Containers {
+		got[cont.ID] = fmt.Sprintf("%d %s", cont.PID, cont.NetNamespace)
+	}
+
+	want := map[string]string{
+		"k8s.io/app":     "4242 isolated",
+		"k8s.io/hostnet": "4343 host",
+		"k8s.io/stopped": "4444 unknown",
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("containers in containerd.json = %v, want %v", got, want)
 	}
 }

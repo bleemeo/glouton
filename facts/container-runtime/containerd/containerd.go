@@ -147,15 +147,20 @@ func (c *Containerd) DiagnosticArchive(_ context.Context, archive types.ArchiveW
 		ID        string
 		Name      string
 		IsIgnored bool
+		PID       int
+		// NetNamespace tells why a container has no network metrics: they're only read for "isolated".
+		NetNamespace string
 	}
 
 	ctrs := make([]containerInfo, 0, len(c.containers))
 
 	for _, row := range c.containers {
 		ctrs = append(ctrs, containerInfo{
-			ID:        row.ID(),
-			Name:      row.ContainerName(),
-			IsIgnored: c.ignoredID[row.ID()],
+			ID:           row.ID(),
+			Name:         row.ContainerName(),
+			IsIgnored:    c.ignoredID[row.ID()],
+			PID:          row.pid,
+			NetNamespace: row.netNamespace.String(),
 		})
 	}
 
@@ -957,6 +962,19 @@ const (
 	// netNamespaceIsolated is a network namespace of the container's own, or of its Kubernetes pod.
 	netNamespaceIsolated
 )
+
+func (ns netNamespace) String() string {
+	switch ns {
+	case netNamespaceUnknown:
+		return "unknown"
+	case netNamespaceHost:
+		return "host"
+	case netNamespaceIsolated:
+		return "isolated"
+	default:
+		return fmt.Sprintf("netNamespace(%d)", int(ns))
+	}
+}
 
 // netNamespaceFromProc tells whether the given PID runs in the host's network namespace.
 //
