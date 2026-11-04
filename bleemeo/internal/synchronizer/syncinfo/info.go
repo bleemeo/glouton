@@ -95,7 +95,9 @@ type SyncInfo struct {
 	// timeDriftMarked is set once agent_status is marked critical for the time drift, and
 	// cleared when the time drift isn't too large anymore.
 	timeDriftMarked bool
-	// lastSyncAt is when info was last synchronized, whether the fetch succeeded or not.
+	// lastSyncAt is when info was last synchronized successfully. A failed synchronization
+	// leaves it unchanged: info is then synchronized again on the next execution, after the
+	// synchronizer's back-off on errors.
 	lastSyncAt time.Time
 	// lastMaintenanceSync is when the maintenance mode was last polled. While MQTT isn't
 	// connected, no notification tells the end of the maintenance: info polls it every 15
@@ -199,36 +201,43 @@ type syncInfoExecution struct {
 	parent    *SyncInfo
 	execution types.SynchronizationExecution
 
-	// globalInfo is what RefreshCache fetched. fetched is false when it failed.
+	// globalInfo is what RefreshCache fetched.
 	globalInfo bleemeoTypes.GlobalInfo
-	fetched    bool
 }
 
-// NeedSynchronization returns whether info should be synchronized: at least every hour, and every
-// 15 minutes to poll the maintenance mode while MQTT can't tell when it ends. Info is also
-// synchronized on request and on full synchronizations.
+// NeedSynchronization returns whether info should be synchronized: an hour after its last
+// successful synchronization, so on the next execution after a failure, and every 15 minutes to
+// poll the maintenance mode while MQTT can't tell when it ends. Info is also synchronized on
+// request and on full synchronizations.
 func (e *syncInfoExecution) NeedSynchronization(_ context.Context) (bool, error) {
 	pollMaintenance := e.parent.needMaintenancePoll(e.execution)
 
 	return pollMaintenance || e.parent.needPeriodicSync(e.execution), nil
 }
 
+// RefreshCache fetches the global information. When it fails, its error fails the execution:
+// SyncRemoteAndLocal isn't called, and info is synchronized again on the next execution.
 func (e *syncInfoExecution) RefreshCache(ctx context.Context, _ types.SyncType) error {
-	e.parent.l.Lock()
-	e.parent.lastSyncAt = e.execution.StartedAt()
-	e.parent.l.Unlock()
+	globalInfo, err := e.parent.fetch(ctx, e.execution)
+	if err != nil {
+		return err
+	}
 
-	e.globalInfo, e.fetched = e.parent.fetch(ctx, e.execution)
+	e.globalInfo = globalInfo
 
 	return nil
 }
 
 func (e *syncInfoExecution) SyncRemoteAndLocal(ctx context.Context, _ types.SyncType) error {
-	if !e.fetched {
-		return nil
+	if err := e.parent.apply(ctx, e.execution, e.globalInfo); err != nil {
+		return err
 	}
 
-	return e.parent.apply(ctx, e.execution, e.globalInfo)
+	e.parent.l.Lock()
+	e.parent.lastSyncAt = e.execution.StartedAt()
+	e.parent.l.Unlock()
+
+	return nil
 }
 
 func (e *syncInfoExecution) FinishExecution(_ context.Context) {
@@ -255,7 +264,8 @@ func (s *SyncInfo) needMaintenancePoll(execution types.SynchronizationExecution)
 	return true
 }
 
-// needPeriodicSync returns whether info was last synchronized syncInterval ago or more.
+// needPeriodicSync returns whether info was last synchronized successfully syncInterval ago or
+// more.
 func (s *SyncInfo) needPeriodicSync(execution types.SynchronizationExecution) bool {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -263,9 +273,8 @@ func (s *SyncInfo) needPeriodicSync(execution types.SynchronizationExecution) bo
 	return execution.StartedAt().Sub(s.lastSyncAt) >= syncInterval
 }
 
-// fetch returns the global information. It returns false when it couldn't be fetched: the
-// failure is only logged, the information will be fetched again later.
-func (s *SyncInfo) fetch(ctx context.Context, execution types.SynchronizationExecution) (bleemeoTypes.GlobalInfo, bool) {
+// fetch returns the global information.
+func (s *SyncInfo) fetch(ctx context.Context, execution types.SynchronizationExecution) (bleemeoTypes.GlobalInfo, error) {
 	globalInfo, err := execution.BleemeoAPIClient().GetGlobalInfo(ctx)
 
 	var certificateErr x509.CertificateInvalidError
@@ -277,14 +286,12 @@ func (s *SyncInfo) fetch(ctx context.Context, execution types.SynchronizationExe
 	}
 
 	if err != nil {
-		logger.V(2).Printf("Couldn't retrieve global information, got '%v'", err)
-
-		return bleemeoTypes.GlobalInfo{}, false
+		return bleemeoTypes.GlobalInfo{}, fmt.Errorf("retrieve global information: %w", err)
 	}
 
 	globalInfo.FetchedAt = s.now()
 
-	return globalInfo, true
+	return globalInfo, nil
 }
 
 // fetchGlobalInfoIgnoringTime returns the global information of the API at apiBase. The
@@ -372,7 +379,7 @@ func verifyIgnoringTime(certificates []*x509.Certificate, hostname string, rootC
 // whether MQTT is reachable, sets the maintenance mode, pushes the time_drift metric and marks
 // agent_status critical for the time drift. A failed update of agent_status doesn't stop the
 // rest: its error is returned at the end, and the update is done again on the next
-// synchronization of info.
+// synchronization of info, on the next execution.
 func (s *SyncInfo) apply(ctx context.Context, execution types.SynchronizationExecution, globalInfo bleemeoTypes.GlobalInfo) error {
 	option := execution.Option()
 	apiClient := execution.BleemeoAPIClient()
