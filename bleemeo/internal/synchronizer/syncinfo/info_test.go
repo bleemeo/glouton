@@ -214,7 +214,8 @@ func newEntity(clock *fakeClock) *SyncInfo {
 }
 
 // runWithError runs one execution of the entity, which was requested, and returns the error of
-// SyncRemoteAndLocal.
+// RefreshCache, or else of SyncRemoteAndLocal. Like the synchronizer, it doesn't call
+// SyncRemoteAndLocal when RefreshCache failed.
 func runWithError(t *testing.T, s *SyncInfo, execution *fakeExecution) error {
 	t.Helper()
 
@@ -226,7 +227,7 @@ func runWithError(t *testing.T, s *SyncInfo, execution *fakeExecution) error {
 	defer e.FinishExecution(t.Context())
 
 	if err := e.RefreshCache(t.Context(), types.SyncTypeNormal); err != nil {
-		t.Fatal(err)
+		return err
 	}
 
 	return e.SyncRemoteAndLocal(t.Context(), types.SyncTypeNormal)
@@ -257,6 +258,8 @@ func TestMaintenancePolling(t *testing.T) {
 
 	start := newTestClock().now
 	s := newEntity(&fakeClock{now: start})
+	// Info was just synchronized: only the maintenance poll may need a synchronization.
+	s.lastSyncAt = start
 
 	for _, step := range []struct {
 		name          string
@@ -292,6 +295,66 @@ func TestMaintenancePolling(t *testing.T) {
 	}
 }
 
+// TestPeriodicSync checks info is synchronized every hour, counting from the last successful
+// synchronization: a failed fetch, or a failed update of agent_status, fails the execution and
+// info is synchronized again on the next one.
+func TestPeriodicSync(t *testing.T) {
+	t.Parallel()
+
+	start := newTestClock().now
+	s := newEntity(&fakeClock{now: start})
+
+	for _, step := range []struct {
+		name       string
+		startedAt  time.Time
+		run        bool
+		fetchErr   error
+		timeDrift  bool
+		updateErr  error
+		want       bool
+		wantRunErr error
+	}{
+		{name: "never synchronized", startedAt: start, run: true, want: true},
+		{name: "59 minutes after", startedAt: start.Add(59 * time.Minute)},
+		{name: "1 hour after", startedAt: start.Add(time.Hour), run: true, fetchErr: errAPIDown, want: true, wantRunErr: errAPIDown},
+		{name: "after a failed fetch", startedAt: start.Add(time.Hour + time.Minute), run: true, timeDrift: true, updateErr: errAPIDown, want: true, wantRunErr: errAPIDown},
+		{name: "after a failed update", startedAt: start.Add(time.Hour + 2*time.Minute), run: true, want: true},
+		{name: "59 minutes after a success", startedAt: start.Add(2*time.Hour + time.Minute)},
+		{name: "1 hour after a success", startedAt: start.Add(2*time.Hour + 2*time.Minute), want: true},
+	} {
+		globalInfo := bleemeoTypes.GlobalInfo{}
+		if step.timeDrift {
+			// A time drift too large marks agent_status, whose update fails.
+			globalInfo = bleemeoTypes.GlobalInfo{CurrentTime: float64(step.startedAt.Add(2 * time.Hour).Unix()), MaxTimeDrift: 60}
+		}
+
+		execution := newFakeExecution(globalInfo)
+		execution.startedAt = step.startedAt
+		execution.client.err = step.fetchErr
+		execution.client.updateErr = step.updateErr
+
+		e, err := s.PrepareExecution(t.Context(), execution)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := e.NeedSynchronization(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got != step.want {
+			t.Errorf("%s: NeedSynchronization() = %v, want %v", step.name, got, step.want)
+		}
+
+		if step.run {
+			if err := runWithError(t, s, execution); !errors.Is(err, step.wantRunErr) {
+				t.Errorf("%s: run error = %v, want %v", step.name, err, step.wantRunErr)
+			}
+		}
+	}
+}
+
 // TestApplyMaintenance checks the maintenance mode is set from the global information, and
 // that nothing is applied when it couldn't be fetched.
 func TestApplyMaintenance(t *testing.T) {
@@ -309,19 +372,12 @@ func TestApplyMaintenance(t *testing.T) {
 		t.Errorf("LastInfo().FetchedAt = %v, want %v", got, clock.now)
 	}
 
-	if s.NeedSynchronizationWithOthers() {
-		t.Error("NeedSynchronizationWithOthers() = true just after a fetch, want false")
-	}
-
-	clock.now = clock.now.Add(time.Hour)
-
-	if !s.NeedSynchronizationWithOthers() {
-		t.Error("NeedSynchronizationWithOthers() = false after an hour, want true")
-	}
-
 	execution = newFakeExecution(bleemeoTypes.GlobalInfo{})
 	execution.client.err = errAPIDown
-	run(t, s, execution)
+
+	if err := runWithError(t, s, execution); !errors.Is(err, errAPIDown) {
+		t.Errorf("run error = %v, want %v", err, errAPIDown)
+	}
 
 	if execution.maintenanceSet != nil {
 		t.Errorf("maintenance set to %v when the fetch failed", *execution.maintenanceSet)
@@ -586,7 +642,11 @@ func TestFetchExpiredCertificate(t *testing.T) {
 		execution := newFakeExecution(bleemeoTypes.GlobalInfo{})
 		execution.client.err = certificateErr
 		execution.cfg.Bleemeo.APIBase = step.apiBase
-		run(t, s, execution)
+
+		err := runWithError(t, s, execution)
+		if (err == nil) != step.applied {
+			t.Errorf("%s: run error = %v, want error %v", step.name, err, !step.applied)
+		}
 
 		if !step.applied {
 			if execution.maintenanceSet != nil {

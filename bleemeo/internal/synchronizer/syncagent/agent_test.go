@@ -18,6 +18,7 @@ package syncagent
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -27,12 +28,15 @@ import (
 	"github.com/bleemeo/glouton/config"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 const (
 	testAgentID   = "agent-id"
 	testAccountID = "account-id"
 )
+
+var errList = errors.New("list failed")
 
 // fakeClient holds the agents of the API. Any call other than UpdateAgent and ListAgents
 // panics.
@@ -42,6 +46,7 @@ type fakeClient struct {
 	agents     []bleemeoTypes.Agent
 	updates    []any
 	listCalled int
+	listErr    error
 }
 
 func (c *fakeClient) UpdateAgent(_ context.Context, id string, data any) (bleemeoTypes.Agent, error) {
@@ -53,6 +58,10 @@ func (c *fakeClient) UpdateAgent(_ context.Context, id string, data any) (bleeme
 func (c *fakeClient) ListAgents(context.Context) ([]bleemeoTypes.Agent, error) {
 	c.listCalled++
 
+	if c.listErr != nil {
+		return nil, c.listErr
+	}
+
 	return c.agents, nil
 }
 
@@ -62,8 +71,8 @@ type fakeState struct {
 
 func (fakeState) BleemeoCredentials() (string, string) { return testAgentID, "password" }
 
-// fakeExecution gives the client, the cache and the configuration to the entity, and counts
-// the labels updates it requests. Any other call panics.
+// fakeExecution gives the client, the cache and the configuration to the entity, and records
+// the labels updates it requests and the entities it fails. Any other call panics.
 type fakeExecution struct {
 	types.SynchronizationExecution
 
@@ -72,11 +81,20 @@ type fakeExecution struct {
 	cfg             config.Config
 	onlyEssential   bool
 	labelsRequested int
+	failed          map[types.EntityName]error
 }
 
 func (e *fakeExecution) BleemeoAPIClient() types.Client { return e.client }
 func (e *fakeExecution) IsOnlyEssential() bool          { return e.onlyEssential }
 func (e *fakeExecution) RequestNotifyLabelsUpdate()     { e.labelsRequested++ }
+
+func (e *fakeExecution) FailOtherEntity(entityName types.EntityName, reason error) {
+	if e.failed == nil {
+		e.failed = make(map[types.EntityName]error)
+	}
+
+	e.failed[entityName] = reason
+}
 
 func (e *fakeExecution) Option() types.Option {
 	return types.Option{Cache: e.cache, State: fakeState{}, Config: e.cfg}
@@ -177,6 +195,31 @@ func TestAgentList(t *testing.T) {
 		if step.wantList != 0 && len(c.Agents()) != len(client.agents) {
 			t.Errorf("%s: %d agents in the cache, want %d", step.name, len(c.Agents()), len(client.agents))
 		}
+	}
+}
+
+// TestAgentListFailure checks a failure to list the agents fails SNMP and vSphere, which would
+// otherwise register duplicates of the agents missing from the cache.
+func TestAgentListFailure(t *testing.T) {
+	t.Parallel()
+
+	execution := &fakeExecution{client: &fakeClient{listErr: errList}, cache: &cache.Cache{}}
+
+	e, err := New().PrepareExecution(t.Context(), execution)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := e.RefreshCache(t.Context(), types.SyncTypeForceCacheRefresh); !errors.Is(err, errList) {
+		t.Errorf("RefreshCache() = %v, want %v", err, errList)
+	}
+
+	want := map[types.EntityName]error{
+		types.EntitySNMP:    ErrAgentListFirst,
+		types.EntityVSphere: ErrAgentListFirst,
+	}
+	if diff := cmp.Diff(want, execution.failed, cmpopts.EquateErrors()); diff != "" {
+		t.Errorf("failed entities mismatch (-want +got)\n%s", diff)
 	}
 }
 
