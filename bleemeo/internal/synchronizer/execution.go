@@ -573,6 +573,17 @@ func (e *Execution) formatSyncDone() string {
 	return strings.Join(part, ", ")
 }
 
+// formatEntityNames returns the names separated by commas, for the logs.
+func formatEntityNames(names []types.EntityName) string {
+	part := make([]string, 0, len(names))
+
+	for _, name := range names {
+		part = append(part, string(name))
+	}
+
+	return strings.Join(part, ", ")
+}
+
 func (e *Execution) hadWork() bool {
 	for _, ee := range e.entities {
 		if ee.syncType != types.SyncTypeNone {
@@ -591,6 +602,20 @@ func (e *Execution) allForcedCacheRefresh() bool {
 	}
 
 	return true
+}
+
+// failedEntities returns the entities requested with a cache refresh that failed. The skipped
+// entities are left out: run already requests them again.
+func (e *Execution) failedEntities() []types.EntityName {
+	var failed []types.EntityName
+
+	for _, ee := range e.entities {
+		if ee.syncType == types.SyncTypeForceCacheRefresh && ee.err != nil && !errors.Is(ee.err, errSkippedExecution) {
+			failed = append(failed, ee.entity.Name())
+		}
+	}
+
+	return failed
 }
 
 // synchronizersCall calls f on each entity which can run. f updates the entity's row in

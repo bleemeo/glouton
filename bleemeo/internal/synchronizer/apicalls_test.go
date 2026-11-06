@@ -595,6 +595,55 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 		{
 			name: "nothing changed after reload",
 		},
+		{
+			// Only the monitors fail: the full synchronization is done for the other entities.
+			name: "full synchronization, monitors failing",
+			prepare: func() {
+				helper.SetTimeToNextFullSync()
+
+				// As in the full synchronization above: without a recent point, the metric would
+				// sometimes be deactivated.
+				helper.pushPoints(t, []labels.Labels{
+					labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: metricCPUUsed}),
+				})
+
+				helper.wrapperClientMock.monitorsErr = errMonitorsUnavailable
+			},
+			// The duplicated agent check is due again, it makes the ListFacts.
+			wantCalls: map[string]int{
+				"GetGlobalInfo":          1,
+				"ListActiveMetrics":      1,
+				"ListAgentTypes":         1,
+				"ListAgents":             1,
+				"ListApplications":       1,
+				"ListConfigs":            2,
+				"ListContainers":         1,
+				"ListDiagnostics":        1,
+				"ListFacts":              1,
+				"ListGloutonConfigItems": 1,
+				"ListMonitors":           1,
+				"ListServices":           1,
+				"UpdateAgent":            1,
+			},
+			wantSync: fullSync,
+			wantErr:  true,
+		},
+		{
+			// Only the monitors are refreshed again, with the metrics which need them: not the
+			// whole full synchronization.
+			name: "only the monitors refreshed",
+			prepare: func() {
+				helper.wrapperClientMock.monitorsErr = nil
+			},
+			wantCalls: map[string]int{"ListActiveMetrics": 1, "ListMonitors": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityMonitor: types.SyncTypeForceCacheRefresh,
+				types.EntityMetric:  types.SyncTypeForceCacheRefresh,
+			},
+		},
+		{
+			name: "nothing changed after the monitors",
+		},
 	}
 
 	for i, step := range steps {

@@ -1156,7 +1156,12 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 	execution := s.newExecution(onlyEssential, wasCreation)
 
 	err := execution.run(ctx)
-	if execution.forceCacheRefreshForAll() && err == nil {
+	if execution.forceCacheRefreshForAll() && ctx.Err() == nil {
+		// The full synchronization is done even when some entities failed: only they are
+		// refreshed again, on the next execution. Redoing the full synchronization would refresh
+		// every entity again, with all their API calls, until the failing ones succeed.
+		failed := execution.failedEntities()
+
 		s.option.Cache.Save()
 
 		s.fullSyncCount++
@@ -1170,7 +1175,23 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 			s.option.ReloadState.SetNextFullSync(s.nextFullSync)
 		}
 
-		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
+		if len(failed) > 0 {
+			s.l.Lock()
+
+			for _, entityName := range failed {
+				s.requestSynchronizationLocked(entityName, true)
+			}
+
+			s.l.Unlock()
+
+			logger.V(1).Printf(
+				"New full synchronization scheduled for %s, the failed entities (%s) are refreshed on the next execution",
+				s.nextFullSync.Format(time.RFC3339),
+				formatEntityNames(failed),
+			)
+		} else {
+			logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
+		}
 	}
 
 	s.l.Lock()
