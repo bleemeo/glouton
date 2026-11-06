@@ -93,8 +93,9 @@ func (s *syncServicesExecution) NeedSynchronization(_ context.Context) (bool, er
 }
 
 func (s *syncServicesExecution) RefreshCache(ctx context.Context, syncType types.SyncType) error {
-	if s.execution.GlobalState().SuccessiveErrors() == 3 {
-		// After 3 error, try to force a full synchronization to see if it solve the issue.
+	if s.execution.ConsecutiveFailures(types.EntityService) == 3 {
+		// After 3 failures of the services in a row, try a cache refresh to see if it solves
+		// the issue.
 		syncType = types.SyncTypeForceCacheRefresh
 	}
 

@@ -242,6 +242,10 @@ type SynchronizationExecution interface {
 	Option() Option
 	// LastSuccessfulSync returns the time the last synchronization started at and completed without error on all entities.
 	LastSuccessfulSync() time.Time
+	// ConsecutiveFailures returns how many executions in a row failed to synchronize the entity,
+	// before this one. A success resets it. The executions where the entity was skipped, or not
+	// run because the connector was disabled, don't count.
+	ConsecutiveFailures(entityName EntityName) int
 	// StartedAt returns the time this synchronization started at.
 	StartedAt() time.Time
 	GlobalState() SynchronizedGlobalState
@@ -352,7 +356,6 @@ type VSphereClient interface {
 type SynchronizedGlobalState interface {
 	IsMaintenance() bool
 	DelayedContainers() (delayedByID map[string]time.Time, minDelayed time.Time)
-	SuccessiveErrors() int
 	UpdateDelayedContainers(localContainers []facts.Container)
 	// Test if API had or not some feature. The default until a call to SetAPIHasFeature() is to assume
 	// feature is NOT available.

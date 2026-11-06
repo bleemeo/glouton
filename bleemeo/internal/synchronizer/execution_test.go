@@ -18,6 +18,7 @@ package synchronizer
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -742,4 +743,60 @@ func Test_requestLaterSynchronization(t *testing.T) {
 			t.Error("the request was dropped, want it kept for the next execution")
 		}
 	})
+}
+
+var errFailed = errors.New("failed")
+
+// TestRecordFailures checks the failures in a row of each entity: a success resets them, and an
+// entity skipped, not run, or not synchronized isn't counted.
+func TestRecordFailures(t *testing.T) {
+	t.Parallel()
+
+	type row struct {
+		syncType types.SyncType
+		err      error
+	}
+
+	executions := []map[types.EntityName]row{
+		{
+			types.EntityService:   {syncType: types.SyncTypeNormal, err: errFailed},
+			types.EntityContainer: {syncType: types.SyncTypeNormal, err: errFailed},
+			types.EntityMetric:    {syncType: types.SyncTypeNormal},
+		},
+		{
+			types.EntityService:   {syncType: types.SyncTypeForceCacheRefresh, err: errFailed},
+			types.EntityContainer: {syncType: types.SyncTypeNormal, err: errSkippedExecution},
+			types.EntityMetric:    {syncType: types.SyncTypeNormal, err: errFailed},
+		},
+		{
+			types.EntityService:   {syncType: types.SyncTypeNormal, err: errFailed},
+			types.EntityContainer: {syncType: types.SyncTypeNormal, err: errConnectorTemporaryDisabled},
+			types.EntityMetric:    {syncType: types.SyncTypeNormal},
+		},
+	}
+
+	e := newTestExecution(nil)
+
+	for _, rows := range executions {
+		for idx := range e.entities {
+			r := rows[e.entities[idx].entity.Name()]
+			e.entities[idx].syncType = r.syncType
+			e.entities[idx].err = r.err
+		}
+
+		e.recordFailures()
+	}
+
+	want := map[types.EntityName]int{
+		types.EntityService:   3,
+		types.EntityContainer: 1,
+		types.EntityMetric:    0,
+		types.EntityAgent:     0,
+	}
+
+	for name, count := range want {
+		if got := e.ConsecutiveFailures(name); got != count {
+			t.Errorf("ConsecutiveFailures(%s) = %d, want %d", name, got, count)
+		}
+	}
 }

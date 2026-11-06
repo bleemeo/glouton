@@ -269,6 +269,13 @@ func (e *Execution) LastSuccessfulSync() time.Time {
 	return e.synchronizer.lastSuccessfulSync
 }
 
+func (e *Execution) ConsecutiveFailures(entityName types.EntityName) int {
+	e.synchronizer.l.Lock()
+	defer e.synchronizer.l.Unlock()
+
+	return e.synchronizer.entityFailures[entityName]
+}
+
 func (e *Execution) StartedAt() time.Time {
 	return e.startedAt
 }
@@ -384,6 +391,8 @@ func (e *Execution) run(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	e.recordFailures()
 
 	syncDone := e.formatSyncDone()
 
@@ -602,6 +611,26 @@ func (e *Execution) allForcedCacheRefresh() bool {
 	}
 
 	return true
+}
+
+// recordFailures counts the failures in a row of each entity the execution synchronized: a
+// success resets it. An entity skipped, or not run because the connector is disabled, isn't
+// counted.
+func (e *Execution) recordFailures() {
+	e.synchronizer.l.Lock()
+	defer e.synchronizer.l.Unlock()
+
+	for _, ee := range e.entities {
+		if ee.syncType == types.SyncTypeNone || errors.Is(ee.err, errSkippedExecution) || errors.Is(ee.err, errConnectorTemporaryDisabled) {
+			continue
+		}
+
+		if ee.err == nil {
+			delete(e.synchronizer.entityFailures, ee.entity.Name())
+		} else {
+			e.synchronizer.entityFailures[ee.entity.Name()]++
+		}
+	}
 }
 
 // failedEntities returns the entities requested with a cache refresh that failed. The skipped

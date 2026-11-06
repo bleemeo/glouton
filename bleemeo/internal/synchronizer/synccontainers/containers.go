@@ -100,10 +100,10 @@ func (e *syncContainersExecution) NeedSynchronization(_ context.Context) (bool, 
 	return needSynchronization(e.execution), nil
 }
 
-// RefreshCache lists the containers from the API on a cache refresh, or after 3 errors in a row
-// to see if it solves the issue.
+// RefreshCache lists the containers from the API on a cache refresh, or after 3 failures of
+// the containers in a row to see if it solves the issue.
 func (e *syncContainersExecution) RefreshCache(ctx context.Context, syncType types.SyncType) error {
-	if syncType != types.SyncTypeForceCacheRefresh && e.execution.GlobalState().SuccessiveErrors() != 3 {
+	if syncType != types.SyncTypeForceCacheRefresh && e.execution.ConsecutiveFailures(types.EntityContainer) != 3 {
 		return nil
 	}
 

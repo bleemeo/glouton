@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -136,6 +137,9 @@ type Synchronizer struct {
 	lastDuplicateCheck time.Time
 	nextDuplicateCheck time.Time
 	forceSync          map[types.EntityName]types.SyncRequest
+	// entityFailures is, per entity, the number of executions in a row which failed to
+	// synchronize it. See Execution.ConsecutiveFailures.
+	entityFailures map[types.EntityName]int
 }
 
 // New return a new Synchronizer.
@@ -167,9 +171,10 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		option: option,
 		now:    now,
 
-		forceSync:     make(map[types.EntityName]types.SyncRequest),
-		nextFullSync:  nextFullSync,
-		fullSyncCount: fullSyncCount,
+		forceSync:      make(map[types.EntityName]types.SyncRequest),
+		entityFailures: make(map[types.EntityName]int),
+		nextFullSync:   nextFullSync,
+		fullSyncCount:  fullSyncCount,
 	}
 
 	s.info = syncinfo.New(&s.requestCounter, s.now)
@@ -257,6 +262,7 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		LastSuccessfulSync        time.Time
 		LastSync                  time.Time
 		SuccessiveErrors          int
+		EntityFailures            map[types.EntityName]int
 		FirstErrorAt              time.Time
 		MaintenanceMode           bool
 		AgentID                   string
@@ -278,6 +284,7 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		LastSuccessfulSync:        s.lastSuccessfulSync,
 		LastSync:                  s.lastSync,
 		SuccessiveErrors:          s.successiveErrors,
+		EntityFailures:            maps.Clone(s.entityFailures),
 		FirstErrorAt:              s.firstErrorAt,
 		MaintenanceMode:           s.maintenanceMode,
 		AgentID:                   s.agentID,
@@ -812,13 +819,6 @@ func (s *Synchronizer) SetAPIHasFeature(feature types.APIFeature, has bool) {
 	}
 
 	s.hasFeature[feature] = has
-}
-
-func (s *Synchronizer) SuccessiveErrors() int {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	return s.successiveErrors
 }
 
 // ScheduleDiagnosticUpload stores the given diagnostic until the next synchronization,
