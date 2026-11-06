@@ -468,6 +468,17 @@ func (e *Execution) applyNeedSynchronization(ctx context.Context) {
 			}
 		}
 	})
+
+	// The skipped entities keep errSkippedExecution: what they need is requested again at the
+	// end of the execution.
+	for idx := range e.entities {
+		ee := &e.entities[idx]
+
+		entity, ok := ee.entity.(types.NeedSynchronizationWhileSkipped)
+		if ok && errors.Is(ee.err, errSkippedExecution) && entity.NeedSynchronizationWhileSkipped(ctx, e) && ee.syncType == types.SyncTypeNone {
+			ee.syncType = types.SyncTypeNormal
+		}
+	}
 }
 
 func (e *Execution) checkLinkedSynchronization() {
