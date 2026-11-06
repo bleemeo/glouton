@@ -46,7 +46,7 @@ type targetAssociation struct {
 type SyncSNMP struct {
 	state   bleemeoTypes.State
 	targets []*snmp.Target
-	// lastCount is the number of SNMP targets online on the last execution.
+	// lastCount is the number of SNMP targets online on the last successful synchronization.
 	lastCount int
 }
 
@@ -88,23 +88,33 @@ func (e *syncSNMPExecution) NeedSynchronization(_ context.Context) (bool, error)
 		return false, err
 	}
 
-	count := e.execution.Option().SNMPOnlineTarget()
-	if count == e.parent.lastCount {
-		return false, nil
-	}
-
-	// TODO: this isn't ideal. If the synchronization fails, it won't be retried.
-	// I think the ideal fix would be to always retry all syncMethods that was to synchronize but failed.
-	e.parent.lastCount = count
-
-	return true, nil
+	// SyncRemoteAndLocal only updates lastCount once it succeeds, so a failed synchronization
+	// is retried on the next execution.
+	return e.execution.Option().SNMPOnlineTarget() != e.parent.lastCount, nil
 }
 
+// RefreshCache does nothing: the SNMP agents are in the agent list of the cache, which
+// EntityAgent refreshes. See syncvsphere's RefreshCache, which relies on it the same way.
 func (e *syncSNMPExecution) RefreshCache(_ context.Context, _ types.SyncType) error {
 	return nil
 }
 
+// SyncRemoteAndLocal registers the SNMP agents, and updates lastCount when it succeeds.
 func (e *syncSNMPExecution) SyncRemoteAndLocal(ctx context.Context, _ types.SyncType) error {
+	// Read before synchronizing: a target which comes online meanwhile is synchronized on the
+	// next execution.
+	count := e.execution.Option().SNMPOnlineTarget()
+
+	if err := e.syncRemoteAndLocal(ctx); err != nil {
+		return err
+	}
+
+	e.parent.lastCount = count
+
+	return nil
+}
+
+func (e *syncSNMPExecution) syncRemoteAndLocal(ctx context.Context) error {
 	option := e.execution.Option()
 
 	cfg, ok := option.Cache.CurrentAccountConfig()

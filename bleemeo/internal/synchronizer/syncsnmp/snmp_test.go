@@ -35,12 +35,22 @@ import (
 
 const snmpTypeID = "snmp-type"
 
-// fakeClient registers the SNMP agents with the ID "new-<display name>".
+var errRegister = errors.New("register failed")
+
+// fakeClient registers the SNMP agents with the ID "new-<display name>", or fails with err. Any
+// other call panics.
 type fakeClient struct {
+	types.Client
+
 	registered []bleemeoapi.AgentPayload
+	err        error
 }
 
 func (c *fakeClient) RegisterSNMPAgent(_ context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
+	if c.err != nil {
+		return bleemeoTypes.Agent{}, c.err
+	}
+
 	c.registered = append(c.registered, payload)
 
 	payload.ID = "new-" + payload.DisplayName
@@ -48,17 +58,25 @@ func (c *fakeClient) RegisterSNMPAgent(_ context.Context, payload bleemeoapi.Age
 	return payload.Agent, nil
 }
 
-// fakeExecution gives the number of SNMP targets online to the entity, and records the linked
-// synchronizations it requests. Any other call panics.
+// fakeExecution gives the number of SNMP targets online, the client and the cache to the entity, and
+// records the linked synchronizations it requests. Any other call panics.
 type fakeExecution struct {
 	types.SynchronizationExecution
 
 	online int
+	client *fakeClient
+	cache  *cache.Cache
 	linked [][2]types.EntityName
 }
 
+func (e *fakeExecution) BleemeoAPIClient() types.Client { return e.client }
+func (e *fakeExecution) IsOnlyEssential() bool          { return false }
+
 func (e *fakeExecution) Option() types.Option {
-	return types.Option{SNMPOnlineTarget: func() int { return e.online }}
+	return types.Option{
+		SNMPOnlineTarget: func() int { return e.online },
+		Cache:            e.cache,
+	}
 }
 
 func (e *fakeExecution) RequestLinkedSynchronization(target types.EntityName, trigger types.EntityName) error {
@@ -218,22 +236,46 @@ func TestRegisterAndUpdate(t *testing.T) {
 }
 
 // TestNeedSynchronization checks the SNMP agents are synchronized when the number of targets
-// online changes, and the facts with them.
+// online changes, and the facts with them. A failed synchronization is retried.
 func TestNeedSynchronization(t *testing.T) {
 	t.Parallel()
 
-	s := newEntity(t)
+	const accountID = "account-id"
+
+	s := newEntity(t, newTarget("printer", "192.168.1.2", "printer.example.com"))
+	client := &fakeClient{}
+
+	// The account has the SNMP integration, which needs a configuration of the SNMP agents.
+	c := &cache.Cache{}
+	c.SetAccountID(accountID)
+	c.SetAgentTypes([]bleemeoTypes.AgentType{
+		{ID: "agent-type", Name: bleemeo.AgentType_Agent},
+		{ID: snmpTypeID, Name: bleemeo.AgentType_SNMP},
+	})
+	c.SetConfigs([]bleemeoTypes.Config{
+		{Type: bleemeoTypes.ConfigTypeSNMPIntegration, Account: accountID, Value: true},
+		{Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: "agent-type", Value: float64(10)},
+		{Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: snmpTypeID, Value: float64(60)},
+	})
 
 	for _, step := range []struct {
-		online int
-		want   bool
+		name    string
+		online  int
+		failing bool
+		want    bool
 	}{
-		{online: 0, want: false},
-		{online: 1, want: true},
-		{online: 1, want: false},
-		{online: 0, want: true},
+		{name: "none online", online: 0, want: false},
+		{name: "one online, registration failing", online: 1, failing: true, want: true},
+		{name: "retry", online: 1, want: true},
+		{name: "unchanged", online: 1, want: false},
+		{name: "offline", online: 0, want: true},
 	} {
-		execution := &fakeExecution{online: step.online}
+		client.err = nil
+		if step.failing {
+			client.err = errRegister
+		}
+
+		execution := &fakeExecution{online: step.online, client: client, cache: c}
 
 		e, err := s.PrepareExecution(t.Context(), execution)
 		if err != nil {
@@ -242,12 +284,24 @@ func TestNeedSynchronization(t *testing.T) {
 
 		need, err := e.NeedSynchronization(t.Context())
 		if err != nil || need != step.want {
-			t.Errorf("%d online: NeedSynchronization() = %v, %v, want %v", step.online, need, err, step.want)
+			t.Errorf("%s: NeedSynchronization() = %v, %v, want %v", step.name, need, err, step.want)
 		}
 
 		want := [][2]types.EntityName{{types.EntityFact, types.EntitySNMP}}
 		if diff := cmp.Diff(want, execution.linked); diff != "" {
-			t.Errorf("%d online: linked synchronizations mismatch (-want +got)\n%s", step.online, diff)
+			t.Errorf("%s: linked synchronizations mismatch (-want +got)\n%s", step.name, diff)
 		}
+
+		if !need {
+			continue
+		}
+
+		if err := e.SyncRemoteAndLocal(t.Context(), types.SyncTypeNormal); (err != nil) != step.failing {
+			t.Errorf("%s: SyncRemoteAndLocal() = %v, want failure %v", step.name, err, step.failing)
+		}
+	}
+
+	if len(client.registered) != 1 {
+		t.Errorf("registered %d agents, want 1", len(client.registered))
 	}
 }
