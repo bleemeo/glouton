@@ -278,7 +278,7 @@ func (e *fakeExecution) LastSuccessfulSync(types.EntityName) time.Time { return 
 func (e *fakeExecution) StartedAt() time.Time                          { return testNow() }
 
 // TestNeedSynchronization checks the containers are synchronized after a discovery, and once a
-// delayed container is due, also while they are skipped in maintenance or suspended mode.
+// delayed container is due.
 func TestNeedSynchronization(t *testing.T) {
 	t.Parallel()
 
@@ -316,10 +316,6 @@ func TestNeedSynchronization(t *testing.T) {
 			need, err := e.NeedSynchronization(t.Context())
 			if err != nil || need != tt.want {
 				t.Errorf("NeedSynchronization() = %v, %v, want %v", need, err, tt.want)
-			}
-
-			if need := s.NeedSynchronizationWhileSkipped(t.Context(), execution); need != tt.want {
-				t.Errorf("NeedSynchronizationWhileSkipped() = %v, want %v", need, tt.want)
 			}
 		})
 	}

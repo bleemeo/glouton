@@ -462,16 +462,14 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			},
 		},
 		{
-			// A discovery during the maintenance: the containers and the metrics are skipped, and
-			// requested again on each execution until it ends.
+			// A discovery during the maintenance: the containers, services and metrics are skipped.
+			// Their last success stays older than the discovery, so they run after the maintenance.
 			name: "maintenance not polled again",
 			prepare: func() {
 				helper.discovery.UpdatedAt = helper.Now()
 			},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityAgent:     types.SyncTypeForceCacheRefresh,
-				types.EntityContainer: types.SyncTypeNormal,
-				types.EntityMetric:    types.SyncTypeNormal,
+				types.EntityAgent: types.SyncTypeForceCacheRefresh,
 			},
 		},
 		{
@@ -485,16 +483,13 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			},
 			wantCalls: map[string]int{"GetGlobalInfo": 1, "ListFacts": 1},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityInfo:      types.SyncTypeNormal,
-				types.EntityAgent:     types.SyncTypeForceCacheRefresh,
-				types.EntityContainer: types.SyncTypeNormal,
-				types.EntityMetric:    types.SyncTypeNormal,
+				types.EntityInfo:  types.SyncTypeNormal,
+				types.EntityAgent: types.SyncTypeForceCacheRefresh,
 			},
 		},
 		{
-			// The entities skipped during the maintenance, including for its discovery, run now.
-			// The services (and the applications they need) weren't synchronized since the
-			// discovery either.
+			// The entities skipped during the maintenance run now: the containers, services (and
+			// the applications they need) and metrics weren't synchronized since the discovery.
 			name:      "after maintenance",
 			wantCalls: map[string]int{"ListAgents": 1, "UpdateAgent": 1},
 			wantSync: map[types.EntityName]types.SyncType{

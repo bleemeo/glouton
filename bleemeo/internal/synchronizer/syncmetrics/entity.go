@@ -173,13 +173,6 @@ func (s *SyncMetrics) DiagnosticArchive(_ context.Context, archive gloutonTypes.
 	return err
 }
 
-// NeedSynchronizationWhileSkipped returns whether the metrics need a synchronization, like
-// NeedSynchronization, while they are skipped in maintenance or suspended mode: the
-// synchronization must stay requested until they run.
-func (s *SyncMetrics) NeedSynchronizationWhileSkipped(_ context.Context, execution types.SynchronizationExecution) bool {
-	return s.needSynchronization(execution)
-}
-
 // needSynchronization returns whether a registration failure is due for a retry, a discovery or
 // a change of the metric annotations happened since the metrics were last synchronized
 // successfully, or the number of metrics changed.

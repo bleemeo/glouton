@@ -105,13 +105,6 @@ func (s *SyncFacts) EnabledInSuspendedMode() bool {
 	return false
 }
 
-// NeedSynchronizationWhileSkipped returns whether the facts were updated, like
-// NeedSynchronization, while they are skipped in maintenance or suspended mode: the
-// synchronization stays requested until they run.
-func (s *SyncFacts) NeedSynchronizationWhileSkipped(ctx context.Context, execution types.SynchronizationExecution) bool {
-	return s.needSynchronization(ctx, execution)
-}
-
 // needSynchronization returns whether the facts were updated since the last facts fully
 // synchronized.
 func (s *SyncFacts) needSynchronization(ctx context.Context, execution types.SynchronizationExecution) bool {

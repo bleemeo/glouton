@@ -94,8 +94,8 @@ func newExecution(option types.Option, lastSync time.Time) (*syncMetricsExecutio
 }
 
 // TestNeedSynchronization checks the metrics are synchronized when a registration retry is due,
-// after a discovery or an annotation change, and when the number of metrics changes, also while
-// they are skipped in maintenance or suspended mode, and with the containers and the monitors.
+// after a discovery or an annotation change, and when the number of metrics changes, with the
+// containers and the monitors.
 func TestNeedSynchronization(t *testing.T) {
 	t.Parallel()
 
@@ -136,10 +136,6 @@ func TestNeedSynchronization(t *testing.T) {
 			need, err := s.NeedSynchronization(t.Context())
 			if err != nil || need != tt.want {
 				t.Errorf("NeedSynchronization() = %v, %v, want %v", need, err, tt.want)
-			}
-
-			if need := s.NeedSynchronizationWhileSkipped(t.Context(), execution); need != tt.want {
-				t.Errorf("NeedSynchronizationWhileSkipped() = %v, want %v", need, tt.want)
 			}
 
 			want := [][2]types.EntityName{
