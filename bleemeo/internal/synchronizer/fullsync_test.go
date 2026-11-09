@@ -37,7 +37,7 @@ func newFullSyncHelper(t *testing.T) *syncTestHelper {
 	helper := newHelper(t)
 
 	helper.preregisterAgent(t)
-	helper.wrapperClientMock.resources.monitors.add(newMonitor)
+	helper.addMonitorOnAPI(t)
 	helper.initSynchronizer(t)
 
 	helper.pushPoints(t, []labels.Labels{

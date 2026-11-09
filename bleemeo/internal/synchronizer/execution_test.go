@@ -18,7 +18,6 @@ package synchronizer
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -745,33 +744,34 @@ func Test_requestLaterSynchronization(t *testing.T) {
 	})
 }
 
-var errFailed = errors.New("failed")
-
-// TestRecordFailures checks the failures in a row of each entity: a success resets them, and an
-// entity skipped, not run, or not synchronized isn't counted.
-func TestRecordFailures(t *testing.T) {
+// TestRecordResults checks the last success and the failures in a row of each entity: a success
+// resets the failures, and an entity skipped, not run, or not synchronized is left as it was.
+func TestRecordResults(t *testing.T) {
 	t.Parallel()
 
 	type row struct {
 		syncType types.SyncType
 		err      error
+		synced   bool
 	}
 
+	// The agent is requested but doesn't run, like when the agent is too old: it keeps no result.
 	executions := []map[types.EntityName]row{
 		{
-			types.EntityService:   {syncType: types.SyncTypeNormal, err: errFailed},
-			types.EntityContainer: {syncType: types.SyncTypeNormal, err: errFailed},
-			types.EntityMetric:    {syncType: types.SyncTypeNormal},
+			types.EntityService:   {syncType: types.SyncTypeNormal, err: errClientError},
+			types.EntityContainer: {syncType: types.SyncTypeNormal, err: errClientError},
+			types.EntityMetric:    {syncType: types.SyncTypeNormal, synced: true},
+			types.EntityAgent:     {syncType: types.SyncTypeNormal},
 		},
 		{
-			types.EntityService:   {syncType: types.SyncTypeForceCacheRefresh, err: errFailed},
+			types.EntityService:   {syncType: types.SyncTypeForceCacheRefresh, err: errClientError},
 			types.EntityContainer: {syncType: types.SyncTypeNormal, err: errSkippedExecution},
-			types.EntityMetric:    {syncType: types.SyncTypeNormal, err: errFailed},
+			types.EntityMetric:    {syncType: types.SyncTypeNormal, err: errClientError},
 		},
 		{
-			types.EntityService:   {syncType: types.SyncTypeNormal, err: errFailed},
+			types.EntityService:   {syncType: types.SyncTypeNormal, err: errClientError},
 			types.EntityContainer: {syncType: types.SyncTypeNormal, err: errConnectorTemporaryDisabled},
-			types.EntityMetric:    {syncType: types.SyncTypeNormal},
+			types.EntityMetric:    {syncType: types.SyncTypeNormal, synced: true},
 		},
 	}
 
@@ -782,21 +782,35 @@ func TestRecordFailures(t *testing.T) {
 			r := rows[e.entities[idx].entity.Name()]
 			e.entities[idx].syncType = r.syncType
 			e.entities[idx].err = r.err
+			e.entities[idx].synced = r.synced
 		}
 
-		e.recordFailures()
+		e.recordResults()
 	}
 
-	want := map[types.EntityName]int{
+	wantFailures := map[types.EntityName]int{
 		types.EntityService:   3,
 		types.EntityContainer: 1,
 		types.EntityMetric:    0,
 		types.EntityAgent:     0,
 	}
 
-	for name, count := range want {
+	for name, count := range wantFailures {
 		if got := e.ConsecutiveFailures(name); got != count {
 			t.Errorf("ConsecutiveFailures(%s) = %d, want %d", name, got, count)
+		}
+	}
+
+	wantLastSync := map[types.EntityName]time.Time{
+		types.EntityService:   {},
+		types.EntityContainer: {},
+		types.EntityMetric:    e.startedAt,
+		types.EntityAgent:     {},
+	}
+
+	for name, at := range wantLastSync {
+		if got := e.LastSuccessfulSync(name); !got.Equal(at) {
+			t.Errorf("LastSuccessfulSync(%s) = %s, want %s", name, got, at)
 		}
 	}
 }

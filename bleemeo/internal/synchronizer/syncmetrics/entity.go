@@ -55,8 +55,6 @@ type SyncMetrics struct {
 	registrationMetrics map[metricStateKey]int
 	// metricsStatePublished tells whether a synchronization published the metrics state yet.
 	metricsStatePublished bool
-	// lastSyncAt is when the execution which last synchronized the metrics successfully started.
-	lastSyncAt time.Time
 }
 
 // New returns the entity. startedAt returns when Glouton started.
@@ -157,14 +155,12 @@ func (s *SyncMetrics) DiagnosticArchive(_ context.Context, archive gloutonTypes.
 		PendingMetricsUpdateCount int
 		RetryableMetricFailure    map[bleemeoTypes.FailureKind]bool
 		MetricRetryAt             time.Time
-		LastSyncAt                time.Time
 	}{
 		LastMetricActivation:      s.lastMetricActivation,
 		LastMetricCount:           s.lastMetricCount,
 		PendingMetricsUpdateCount: len(s.pendingMetricsUpdate),
 		RetryableMetricFailure:    s.retryableMetricFailure,
 		MetricRetryAt:             s.metricRetryAt,
-		LastSyncAt:                s.lastSyncAt,
 	}
 
 	enc := json.NewEncoder(file)
@@ -191,13 +187,14 @@ func (s *SyncMetrics) needSynchronization(execution types.SynchronizationExecuti
 	_, lastDiscovery := s.option.Discovery.GetLatestDiscovery()
 	currentMetricCount := s.option.Store.MetricsCount()
 	lastAnnotationChange := s.option.LastMetricAnnotationChange()
+	lastSuccessfulSync := execution.LastSuccessfulSync(types.EntityMetric)
 
 	s.l.Lock()
 	defer s.l.Unlock()
 
 	return execution.StartedAt().After(s.metricRetryAt) ||
-		s.lastSyncAt.Before(lastDiscovery) ||
-		s.lastSyncAt.Before(lastAnnotationChange) ||
+		lastSuccessfulSync.Before(lastDiscovery) ||
+		lastSuccessfulSync.Before(lastAnnotationChange) ||
 		s.lastMetricCount != currentMetricCount
 }
 
@@ -241,15 +238,7 @@ func (s *syncMetricsExecution) SyncRemoteAndLocal(ctx context.Context, syncType 
 		s.execution.RequestUpdateThresholds()
 	}
 
-	if err != nil {
-		return err
-	}
-
-	s.l.Lock()
-	s.lastSyncAt = s.execution.StartedAt()
-	s.l.Unlock()
-
-	return nil
+	return err
 }
 
 func (s *syncMetricsExecution) FinishExecution(_ context.Context) {

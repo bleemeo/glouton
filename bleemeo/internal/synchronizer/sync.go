@@ -137,8 +137,10 @@ type Synchronizer struct {
 	lastDuplicateCheck time.Time
 	nextDuplicateCheck time.Time
 	forceSync          map[types.EntityName]types.SyncRequest
-	// entityFailures is, per entity, the number of executions in a row which failed to
-	// synchronize it. See Execution.ConsecutiveFailures.
+	// entityLastSync is, per entity, when the execution which last synchronized it successfully
+	// started, and entityFailures the number of executions in a row which failed to synchronize
+	// it. See Execution.LastSuccessfulSync and Execution.ConsecutiveFailures.
+	entityLastSync map[types.EntityName]time.Time
 	entityFailures map[types.EntityName]int
 }
 
@@ -172,6 +174,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		now:    now,
 
 		forceSync:      make(map[types.EntityName]types.SyncRequest),
+		entityLastSync: make(map[types.EntityName]time.Time),
 		entityFailures: make(map[types.EntityName]int),
 		nextFullSync:   nextFullSync,
 		fullSyncCount:  fullSyncCount,
@@ -262,6 +265,7 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		LastSuccessfulSync        time.Time
 		LastSync                  time.Time
 		SuccessiveErrors          int
+		EntityLastSync            map[types.EntityName]time.Time
 		EntityFailures            map[types.EntityName]int
 		FirstErrorAt              time.Time
 		MaintenanceMode           bool
@@ -284,6 +288,7 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		LastSuccessfulSync:        s.lastSuccessfulSync,
 		LastSync:                  s.lastSync,
 		SuccessiveErrors:          s.successiveErrors,
+		EntityLastSync:            maps.Clone(s.entityLastSync),
 		EntityFailures:            maps.Clone(s.entityFailures),
 		FirstErrorAt:              s.firstErrorAt,
 		MaintenanceMode:           s.maintenanceMode,
@@ -1175,23 +1180,15 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 			s.option.ReloadState.SetNextFullSync(s.nextFullSync)
 		}
 
-		if len(failed) > 0 {
-			s.l.Lock()
+		s.l.Lock()
 
-			for _, entityName := range failed {
-				s.requestSynchronizationLocked(entityName, true)
-			}
-
-			s.l.Unlock()
-
-			logger.V(1).Printf(
-				"New full synchronization scheduled for %s, the failed entities (%s) are refreshed on the next execution",
-				s.nextFullSync.Format(time.RFC3339),
-				formatEntityNames(failed),
-			)
-		} else {
-			logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
+		for _, entityName := range failed {
+			s.requestSynchronizationLocked(entityName, true)
 		}
+
+		s.l.Unlock()
+
+		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 
 	s.l.Lock()

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
@@ -44,11 +43,6 @@ const (
 
 type SyncServices struct {
 	lastDenyReasonLogAt time.Time
-
-	l sync.Mutex
-	// lastSyncAt is when the execution which last synchronized the services successfully
-	// started.
-	lastSyncAt time.Time
 }
 
 func New() *SyncServices {
@@ -87,11 +81,7 @@ func (s *syncServicesExecution) NeedSynchronization(_ context.Context) (bool, er
 	_, lastDiscovery := s.execution.Option().Discovery.GetLatestDiscovery()
 	_, minDelayed := s.execution.GlobalState().DelayedContainers()
 
-	s.parent.l.Lock()
-	lastSyncAt := s.parent.lastSyncAt
-	s.parent.l.Unlock()
-
-	if lastSyncAt.Before(lastDiscovery) || (!minDelayed.IsZero() && s.execution.StartedAt().After(minDelayed)) {
+	if s.execution.LastSuccessfulSync(types.EntityService).Before(lastDiscovery) || (!minDelayed.IsZero() && s.execution.StartedAt().After(minDelayed)) {
 		// Metrics registration may need services to be synced, trigger metrics synchronization to be sure any
 		// possible blocked metrics get registered after service are registered
 		s.execution.RequestSynchronization(types.EntityMetric, false)
@@ -119,17 +109,8 @@ func (s *syncServicesExecution) RefreshCache(ctx context.Context, syncType types
 	return nil
 }
 
-// SyncRemoteAndLocal registers, updates and deletes the services, and records when it succeeds.
 func (s *syncServicesExecution) SyncRemoteAndLocal(ctx context.Context, _ types.SyncType) error {
-	if err := s.syncRemoteAndLocal(ctx, s.execution); err != nil {
-		return err
-	}
-
-	s.parent.l.Lock()
-	s.parent.lastSyncAt = s.execution.StartedAt()
-	s.parent.l.Unlock()
-
-	return nil
+	return s.syncRemoteAndLocal(ctx, s.execution)
 }
 
 func (s *syncServicesExecution) FinishExecution(_ context.Context) {

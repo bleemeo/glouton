@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
@@ -46,11 +45,6 @@ const (
 type SyncContainers struct {
 	now  func() time.Time
 	logs *types.LogThrottle
-
-	l sync.Mutex
-	// lastSyncAt is when the execution which last synchronized the containers successfully
-	// started.
-	lastSyncAt time.Time
 }
 
 func New(now func() time.Time) *SyncContainers {
@@ -76,7 +70,7 @@ func (s *SyncContainers) EnabledInSuspendedMode() bool {
 // NeedSynchronization, while they are skipped in maintenance or suspended mode: the
 // synchronization must stay requested until they run.
 func (s *SyncContainers) NeedSynchronizationWhileSkipped(_ context.Context, execution types.SynchronizationExecution) bool {
-	return s.needSynchronization(execution)
+	return needSynchronization(execution)
 }
 
 func (s *SyncContainers) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
@@ -102,7 +96,7 @@ type syncContainersExecution struct {
 // NeedSynchronization synchronizes the containers after a discovery, and once a delayed
 // container is due.
 func (e *syncContainersExecution) NeedSynchronization(_ context.Context) (bool, error) {
-	return e.parent.needSynchronization(e.execution), nil
+	return needSynchronization(e.execution), nil
 }
 
 // RefreshCache lists the containers from the API on a cache refresh, or after 3 failures of
@@ -115,21 +109,7 @@ func (e *syncContainersExecution) RefreshCache(ctx context.Context, syncType typ
 	return updateList(ctx, e.execution.BleemeoAPIClient(), e.execution.Option().Cache, e.agentID)
 }
 
-// SyncRemoteAndLocal registers, updates and deletes the containers, and records when it
-// succeeds.
 func (e *syncContainersExecution) SyncRemoteAndLocal(ctx context.Context, _ types.SyncType) error {
-	if err := e.syncRemoteAndLocal(ctx); err != nil {
-		return err
-	}
-
-	e.parent.l.Lock()
-	e.parent.lastSyncAt = e.execution.StartedAt()
-	e.parent.l.Unlock()
-
-	return nil
-}
-
-func (e *syncContainersExecution) syncRemoteAndLocal(ctx context.Context) error {
 	var localContainers []facts.Container
 
 	option := e.execution.Option()
@@ -183,15 +163,11 @@ func (e *syncContainersExecution) FinishExecution(_ context.Context) {
 
 // needSynchronization returns whether a discovery happened since the containers were last
 // synchronized successfully, or a delayed container is due.
-func (s *SyncContainers) needSynchronization(execution types.SynchronizationExecution) bool {
+func needSynchronization(execution types.SynchronizationExecution) bool {
 	_, lastDiscovery := execution.Option().Discovery.GetLatestDiscovery()
 	_, minDelayed := execution.GlobalState().DelayedContainers()
 
-	s.l.Lock()
-	lastSyncAt := s.lastSyncAt
-	s.l.Unlock()
-
-	if lastSyncAt.Before(lastDiscovery) {
+	if execution.LastSuccessfulSync(types.EntityContainer).Before(lastDiscovery) {
 		return true
 	}
 

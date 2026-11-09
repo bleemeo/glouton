@@ -240,6 +240,9 @@ type SynchronizationExecution interface {
 	RequestUpdateThresholds()
 	RequestNotifyLabelsUpdate()
 	Option() Option
+	// LastSuccessfulSync returns when the execution which last synchronized the entity successfully
+	// started.
+	LastSuccessfulSync(entityName EntityName) time.Time
 	// ConsecutiveFailures returns how many executions in a row failed to synchronize the entity,
 	// before this one. A success resets it. The executions where the entity was skipped, or not
 	// run because the connector was disabled, don't count.

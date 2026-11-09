@@ -41,9 +41,12 @@ const testAgentID = "agent-id"
 
 func testNow() time.Time { return time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC) }
 
-// fakeClient records the containers registered and updated. UpdateContainer returns NotFound for
-// the IDs of notFound.
+// fakeClient counts the lists of containers, and records the containers registered and updated.
+// UpdateContainer returns NotFound for the IDs of notFound. Any other call panics.
 type fakeClient struct {
+	types.Client
+
+	listed     int
 	registered []bleemeoapi.ContainerPayload
 	// updated is the payloads of UpdateContainer, by container ID.
 	updated  map[string]any
@@ -52,6 +55,8 @@ type fakeClient struct {
 }
 
 func (c *fakeClient) ListContainers(context.Context, string) ([]bleemeoTypes.Container, error) {
+	c.listed++
+
 	return nil, nil
 }
 
@@ -249,11 +254,12 @@ func (s fakeGlobalState) DelayedContainers() (map[string]time.Time, time.Time) {
 type fakeExecution struct {
 	types.SynchronizationExecution
 
-	discovery  *discovery.MockDiscoverer
-	minDelayed time.Time
-	cache      *cache.Cache
-	client     types.Client
-	failures   int
+	discovery          *discovery.MockDiscoverer
+	minDelayed         time.Time
+	lastSuccessfulSync time.Time
+	cache              *cache.Cache
+	client             types.Client
+	failures           int
 }
 
 func (e *fakeExecution) Option() types.Option {
@@ -268,7 +274,8 @@ func (e *fakeExecution) GlobalState() types.SynchronizedGlobalState {
 	return fakeGlobalState{minDelayed: e.minDelayed}
 }
 
-func (e *fakeExecution) StartedAt() time.Time { return testNow() }
+func (e *fakeExecution) LastSuccessfulSync(types.EntityName) time.Time { return e.lastSuccessfulSync }
+func (e *fakeExecution) StartedAt() time.Time                          { return testNow() }
 
 // TestNeedSynchronization checks the containers are synchronized after a discovery, and once a
 // delayed container is due, also while they are skipped in maintenance or suspended mode.
@@ -294,12 +301,12 @@ func TestNeedSynchronization(t *testing.T) {
 			t.Parallel()
 
 			execution := &fakeExecution{
-				discovery:  &discovery.MockDiscoverer{UpdatedAt: tt.discovery},
-				minDelayed: tt.minDelayed,
+				discovery:          &discovery.MockDiscoverer{UpdatedAt: tt.discovery},
+				minDelayed:         tt.minDelayed,
+				lastSuccessfulSync: lastSync,
 			}
 
 			s := newEntity()
-			s.lastSyncAt = lastSync
 
 			e, err := s.PrepareExecution(t.Context(), execution)
 			if err != nil {
@@ -316,19 +323,6 @@ func TestNeedSynchronization(t *testing.T) {
 			}
 		})
 	}
-}
-
-// listingClient counts the lists of containers. Any other call panics.
-type listingClient struct {
-	types.Client
-
-	listed int
-}
-
-func (c *listingClient) ListContainers(context.Context, string) ([]bleemeoTypes.Container, error) {
-	c.listed++
-
-	return nil, nil
 }
 
 // TestRefreshCacheAfterFailures checks the containers are listed on a cache refresh, and after
@@ -353,7 +347,7 @@ func TestRefreshCacheAfterFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			client := &listingClient{}
+			client := &fakeClient{}
 			execution := &fakeExecution{cache: &cache.Cache{}, client: client, failures: test.failures}
 
 			e, err := New(testNow).PrepareExecution(t.Context(), execution)

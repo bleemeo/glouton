@@ -54,6 +54,8 @@ type EntityExecution struct {
 	syncType          types.SyncType
 	err               error
 	linkedSyncTargets []types.EntityName
+	// synced is whether SyncRemoteAndLocal succeeded.
+	synced bool
 }
 
 var errSkippedExecution = errors.New("execution skipped to due maintenance mode or similar reason")
@@ -262,6 +264,13 @@ func (e *Execution) Option() types.Option {
 	return e.synchronizer.option
 }
 
+func (e *Execution) LastSuccessfulSync(entityName types.EntityName) time.Time {
+	e.synchronizer.l.Lock()
+	defer e.synchronizer.l.Unlock()
+
+	return e.synchronizer.entityLastSync[entityName]
+}
+
 func (e *Execution) ConsecutiveFailures(entityName types.EntityName) int {
 	e.synchronizer.l.Lock()
 	defer e.synchronizer.l.Unlock()
@@ -348,6 +357,7 @@ func (e *Execution) run(ctx context.Context) error {
 		}
 
 		ee.err = ee.synchronizer.SyncRemoteAndLocal(ctx, ee.syncType)
+		ee.synced = ee.err == nil
 	})
 
 	var errs []error
@@ -385,7 +395,7 @@ func (e *Execution) run(ctx context.Context) error {
 		return ctx.Err()
 	}
 
-	e.recordFailures()
+	e.recordResults()
 
 	syncDone := e.formatSyncDone()
 
@@ -575,17 +585,6 @@ func (e *Execution) formatSyncDone() string {
 	return strings.Join(part, ", ")
 }
 
-// formatEntityNames returns the names separated by commas, for the logs.
-func formatEntityNames(names []types.EntityName) string {
-	part := make([]string, 0, len(names))
-
-	for _, name := range names {
-		part = append(part, string(name))
-	}
-
-	return strings.Join(part, ", ")
-}
-
 func (e *Execution) hadWork() bool {
 	for _, ee := range e.entities {
 		if ee.syncType != types.SyncTypeNone {
@@ -606,22 +605,23 @@ func (e *Execution) allForcedCacheRefresh() bool {
 	return true
 }
 
-// recordFailures counts the failures in a row of each entity the execution synchronized: a
-// success resets it. An entity skipped, or not run because the connector is disabled, isn't
-// counted.
-func (e *Execution) recordFailures() {
+// recordResults records, for each entity the execution synchronized, when it last succeeded and
+// how many times in a row it failed: a success resets the count. An entity skipped, or not run
+// because the connector is disabled, is left as it was.
+func (e *Execution) recordResults() {
 	e.synchronizer.l.Lock()
 	defer e.synchronizer.l.Unlock()
 
 	for _, ee := range e.entities {
-		if ee.syncType == types.SyncTypeNone || errors.Is(ee.err, errSkippedExecution) || errors.Is(ee.err, errConnectorTemporaryDisabled) {
-			continue
-		}
+		name := ee.entity.Name()
 
-		if ee.err == nil {
-			delete(e.synchronizer.entityFailures, ee.entity.Name())
-		} else {
-			e.synchronizer.entityFailures[ee.entity.Name()]++
+		switch {
+		case ee.synced:
+			e.synchronizer.entityLastSync[name] = e.startedAt
+			delete(e.synchronizer.entityFailures, name)
+		case ee.syncType != types.SyncTypeNone && ee.err != nil &&
+			!errors.Is(ee.err, errSkippedExecution) && !errors.Is(ee.err, errConnectorTemporaryDisabled):
+			e.synchronizer.entityFailures[name]++
 		}
 	}
 }
