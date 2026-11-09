@@ -249,12 +249,11 @@ func (s fakeGlobalState) DelayedContainers() (map[string]time.Time, time.Time) {
 type fakeExecution struct {
 	types.SynchronizationExecution
 
-	discovery          *discovery.MockDiscoverer
-	minDelayed         time.Time
-	lastSuccessfulSync time.Time
-	cache              *cache.Cache
-	client             types.Client
-	failures           int
+	discovery  *discovery.MockDiscoverer
+	minDelayed time.Time
+	cache      *cache.Cache
+	client     types.Client
+	failures   int
 }
 
 func (e *fakeExecution) Option() types.Option {
@@ -269,8 +268,7 @@ func (e *fakeExecution) GlobalState() types.SynchronizedGlobalState {
 	return fakeGlobalState{minDelayed: e.minDelayed}
 }
 
-func (e *fakeExecution) LastSuccessfulSync() time.Time { return e.lastSuccessfulSync }
-func (e *fakeExecution) StartedAt() time.Time          { return testNow() }
+func (e *fakeExecution) StartedAt() time.Time { return testNow() }
 
 // TestNeedSynchronization checks the containers are synchronized after a discovery, and once a
 // delayed container is due, also while they are skipped in maintenance or suspended mode.
@@ -296,12 +294,12 @@ func TestNeedSynchronization(t *testing.T) {
 			t.Parallel()
 
 			execution := &fakeExecution{
-				discovery:          &discovery.MockDiscoverer{UpdatedAt: tt.discovery},
-				minDelayed:         tt.minDelayed,
-				lastSuccessfulSync: lastSync,
+				discovery:  &discovery.MockDiscoverer{UpdatedAt: tt.discovery},
+				minDelayed: tt.minDelayed,
 			}
 
 			s := newEntity()
+			s.lastSyncAt = lastSync
 
 			e, err := s.PrepareExecution(t.Context(), execution)
 			if err != nil {

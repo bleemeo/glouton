@@ -493,12 +493,16 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 		},
 		{
 			// The entities skipped during the maintenance, including for its discovery, run now.
+			// The services (and the applications they need) weren't synchronized since the
+			// discovery either.
 			name:      "after maintenance",
 			wantCalls: map[string]int{"ListAgents": 1, "UpdateAgent": 1},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityAgent:     types.SyncTypeForceCacheRefresh,
-				types.EntityContainer: types.SyncTypeNormal,
-				types.EntityMetric:    types.SyncTypeNormal,
+				types.EntityAgent:       types.SyncTypeForceCacheRefresh,
+				types.EntityApplication: types.SyncTypeNormal,
+				types.EntityContainer:   types.SyncTypeNormal,
+				types.EntityMetric:      types.SyncTypeNormal,
+				types.EntityService:     types.SyncTypeNormal,
 			},
 		},
 		{
@@ -643,6 +647,53 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 		},
 		{
 			name: "nothing changed after the monitors",
+		},
+		{
+			// The monitor update fails, the discovery is synchronized.
+			name: "discovery, a monitor update failing",
+			prepare: func() {
+				helper.wrapperClientMock.monitorsErr = errMonitorsUnavailable
+				helper.s.UpdateMonitor("change", newMonitor.ID)
+
+				helper.discovery.UpdatedAt = helper.Now()
+			},
+			wantCalls: map[string]int{"GetMonitorByID": 1, "ListAgents": 1, "UpdateAgent": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityAgent:       types.SyncTypeForceCacheRefresh,
+				types.EntityApplication: types.SyncTypeNormal,
+				types.EntityContainer:   types.SyncTypeNormal,
+				types.EntityMetric:      types.SyncTypeNormal,
+				types.EntityMonitor:     types.SyncTypeNormal,
+				types.EntityService:     types.SyncTypeNormal,
+			},
+			wantErr: true,
+		},
+		{
+			// Only the monitor update is retried: the discovery was synchronized, even though the
+			// execution failed.
+			name: "monitor update still failing",
+			prepare: func() {
+				helper.AddTime(time.Minute)
+			},
+			wantCalls: map[string]int{"GetMonitorByID": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityMonitor: types.SyncTypeNormal,
+				types.EntityMetric:  types.SyncTypeNormal,
+			},
+			wantErr: true,
+		},
+		{
+			name: "monitor update retried",
+			prepare: func() {
+				helper.wrapperClientMock.monitorsErr = nil
+
+				helper.AddTime(time.Minute)
+			},
+			wantCalls: map[string]int{"GetMonitorByID": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityMonitor: types.SyncTypeNormal,
+				types.EntityMetric:  types.SyncTypeNormal,
+			},
 		},
 	}
 

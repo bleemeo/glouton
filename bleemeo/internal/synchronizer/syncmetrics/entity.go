@@ -55,6 +55,8 @@ type SyncMetrics struct {
 	registrationMetrics map[metricStateKey]int
 	// metricsStatePublished tells whether a synchronization published the metrics state yet.
 	metricsStatePublished bool
+	// lastSyncAt is when the execution which last synchronized the metrics successfully started.
+	lastSyncAt time.Time
 }
 
 // New returns the entity. startedAt returns when Glouton started.
@@ -155,12 +157,14 @@ func (s *SyncMetrics) DiagnosticArchive(_ context.Context, archive gloutonTypes.
 		PendingMetricsUpdateCount int
 		RetryableMetricFailure    map[bleemeoTypes.FailureKind]bool
 		MetricRetryAt             time.Time
+		LastSyncAt                time.Time
 	}{
 		LastMetricActivation:      s.lastMetricActivation,
 		LastMetricCount:           s.lastMetricCount,
 		PendingMetricsUpdateCount: len(s.pendingMetricsUpdate),
 		RetryableMetricFailure:    s.retryableMetricFailure,
 		MetricRetryAt:             s.metricRetryAt,
+		LastSyncAt:                s.lastSyncAt,
 	}
 
 	enc := json.NewEncoder(file)
@@ -174,28 +178,26 @@ func (s *SyncMetrics) DiagnosticArchive(_ context.Context, archive gloutonTypes.
 }
 
 // NeedSynchronizationWhileSkipped returns whether the metrics need a synchronization, like
-// NeedSynchronization, while they are skipped in maintenance or suspended mode. The discovery and
-// the annotation change are compared with the last successful synchronization, which keeps
-// moving while they're skipped: the synchronization must stay requested until they run.
+// NeedSynchronization, while they are skipped in maintenance or suspended mode: the
+// synchronization must stay requested until they run.
 func (s *SyncMetrics) NeedSynchronizationWhileSkipped(_ context.Context, execution types.SynchronizationExecution) bool {
 	return s.needSynchronization(execution)
 }
 
 // needSynchronization returns whether a registration failure is due for a retry, a discovery or
-// a change of the metric annotations happened since the last successful synchronization, or the
-// number of metrics changed.
+// a change of the metric annotations happened since the metrics were last synchronized
+// successfully, or the number of metrics changed.
 func (s *SyncMetrics) needSynchronization(execution types.SynchronizationExecution) bool {
 	_, lastDiscovery := s.option.Discovery.GetLatestDiscovery()
 	currentMetricCount := s.option.Store.MetricsCount()
 	lastAnnotationChange := s.option.LastMetricAnnotationChange()
-	lastSuccessfulSync := execution.LastSuccessfulSync()
 
 	s.l.Lock()
 	defer s.l.Unlock()
 
 	return execution.StartedAt().After(s.metricRetryAt) ||
-		lastSuccessfulSync.Before(lastDiscovery) ||
-		lastSuccessfulSync.Before(lastAnnotationChange) ||
+		s.lastSyncAt.Before(lastDiscovery) ||
+		s.lastSyncAt.Before(lastAnnotationChange) ||
 		s.lastMetricCount != currentMetricCount
 }
 
@@ -239,7 +241,15 @@ func (s *syncMetricsExecution) SyncRemoteAndLocal(ctx context.Context, syncType 
 		s.execution.RequestUpdateThresholds()
 	}
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	s.l.Lock()
+	s.lastSyncAt = s.execution.StartedAt()
+	s.l.Unlock()
+
+	return nil
 }
 
 func (s *syncMetricsExecution) FinishExecution(_ context.Context) {

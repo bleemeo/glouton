@@ -74,12 +74,9 @@ func (c *fakeClient) SetMetricActive(_ context.Context, id string, active bool) 
 // it requests. Any other call panics.
 type fakeExecution struct {
 	executiontest.Recorder
-
-	lastSuccessfulSync time.Time
 }
 
-func (e *fakeExecution) StartedAt() time.Time          { return testNow() }
-func (e *fakeExecution) LastSuccessfulSync() time.Time { return e.lastSuccessfulSync }
+func (e *fakeExecution) StartedAt() time.Time { return testNow() }
 
 // newExecution returns an execution of a new entity, which last synchronized at lastSync.
 func newExecution(option types.Option, lastSync time.Time) (*syncMetricsExecution, *fakeExecution) {
@@ -88,7 +85,8 @@ func newExecution(option types.Option, lastSync time.Time) (*syncMetricsExecutio
 	}
 
 	s := New(option, testNow, func() time.Time { return testNow().Add(-time.Hour) })
-	execution := &fakeExecution{lastSuccessfulSync: lastSync}
+	s.lastSyncAt = lastSync
+	execution := &fakeExecution{}
 
 	return &syncMetricsExecution{SyncMetrics: s, execution: execution, agentID: testAgentID}, execution
 }
