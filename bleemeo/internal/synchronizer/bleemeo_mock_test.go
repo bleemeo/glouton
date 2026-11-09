@@ -44,6 +44,8 @@ type wrapperClientMock struct {
 	errorsCount  int
 	// monitorsErr is returned by ListMonitors and GetMonitorByID when set.
 	monitorsErr error
+	// agentsErr is returned by ListAgents when set.
+	agentsErr error
 	// globalInfo is returned by GetGlobalInfo.
 	globalInfo bleemeoTypes.GlobalInfo
 
@@ -176,6 +178,10 @@ func (wcm *wrapperClientMock) ListConfigs(_ context.Context, _ url.Values) ([]bl
 
 func (wcm *wrapperClientMock) ListAgents(context.Context) ([]bleemeoTypes.Agent, error) {
 	wcm.count(mockAPIResourceAgent, "ListAgents")
+
+	if wcm.agentsErr != nil {
+		return nil, wcm.agentsErr
+	}
 
 	agents := make([]bleemeoTypes.Agent, len(wcm.resources.agents.elems))
 	for i, agent := range wcm.resources.agents.elems {

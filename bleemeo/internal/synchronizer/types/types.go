@@ -228,7 +228,9 @@ type SynchronizationExecution interface {
 	// FailOtherEntity will cause execution of the synchronization of another entity to not
 	// be run in this execution and fail with provided error. This is useful if one entity
 	// must be created/updated before another entity synchronization runs.
-	FailOtherEntity(entityName EntityName, reason error)
+	// It does nothing if the other entity isn't scheduled in this execution. It could only be
+	// called during RefreshCache or SyncRemoteAndLocal: it returns an error otherwise.
+	FailOtherEntity(entityName EntityName, reason error) error
 	// RequestSynchronizationForAll calls RequestSynchronization for all known entities.
 	RequestSynchronizationForAll(requestFull bool)
 	// RequestLaterSynchronization asks for a synchronization of the specified entity to occur

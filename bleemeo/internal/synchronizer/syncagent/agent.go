@@ -108,10 +108,11 @@ func (e *syncAgentExecution) RefreshCache(ctx context.Context, syncType types.Sy
 		// SNMP and vSphere look for the agents of their targets in this list, and register
 		// an agent for each target they don't find there. With a stale list, they would
 		// register a duplicate of an agent the API already has.
-		e.execution.FailOtherEntity(types.EntitySNMP, ErrAgentListFirst)
-		e.execution.FailOtherEntity(types.EntityVSphere, ErrAgentListFirst)
-
-		return err
+		return errors.Join(
+			err,
+			e.execution.FailOtherEntity(types.EntitySNMP, ErrAgentListFirst),
+			e.execution.FailOtherEntity(types.EntityVSphere, ErrAgentListFirst),
+		)
 	}
 
 	// If an agent is deleted, ensure our Labels on metric are up-to-date.

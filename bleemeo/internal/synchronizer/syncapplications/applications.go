@@ -73,9 +73,7 @@ func (e *syncApplicationsExecution) RefreshCache(ctx context.Context, syncType t
 	if syncType == types.SyncTypeForceCacheRefresh {
 		err := refreshCache(ctx, e.execution.BleemeoAPIClient(), e.execution.Option().Cache)
 		if err != nil {
-			e.execution.FailOtherEntity(types.EntityService, ErrApplicationFirst)
-
-			return err
+			return errors.Join(err, e.execution.FailOtherEntity(types.EntityService, ErrApplicationFirst))
 		}
 	}
 
@@ -100,9 +98,7 @@ func (e *syncApplicationsExecution) SyncRemoteAndLocal(ctx context.Context, _ ty
 	}
 
 	if err != nil {
-		e.execution.FailOtherEntity(types.EntityService, ErrApplicationFirst)
-
-		return err
+		return errors.Join(err, e.execution.FailOtherEntity(types.EntityService, ErrApplicationFirst))
 	}
 
 	return nil

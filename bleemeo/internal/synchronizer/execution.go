@@ -219,16 +219,25 @@ func (e *Execution) RequestLinkedSynchronization(targetEntityName types.EntityNa
 	return nil
 }
 
-func (e *Execution) FailOtherEntity(entityName types.EntityName, reason error) {
+// FailOtherEntity fails another entity of this execution, when it is scheduled: an entity that
+// isn't scheduled has nothing to fail. It must be called during RefreshCache or SyncRemoteAndLocal,
+// when the sync types of the execution no longer change.
+func (e *Execution) FailOtherEntity(entityName types.EntityName, reason error) error {
+	if !e.syncListStarted {
+		return fmt.Errorf("%w: FailOtherEntity must be called during RefreshCache() or SyncRemoteAndLocal()", types.ErrUnexpectedWorkflow)
+	}
+
 	for idx, row := range e.entities {
 		if row.entity.Name() == entityName {
-			if row.err == nil {
+			if row.err == nil && row.syncType != types.SyncTypeNone {
 				e.entities[idx].err = reason
 			}
 
 			break
 		}
 	}
+
+	return nil
 }
 
 func (e *Execution) RequestSynchronizationForAll(forceCacheRefresh bool) {

@@ -48,10 +48,12 @@ func (r *Recorder) RequestSynchronization(entityName types.EntityName, requestFu
 	r.Requested[entityName] = requestFull
 }
 
-func (r *Recorder) FailOtherEntity(entityName types.EntityName, reason error) {
+func (r *Recorder) FailOtherEntity(entityName types.EntityName, reason error) error {
 	if r.Failed == nil {
 		r.Failed = make(map[types.EntityName]error)
 	}
 
 	r.Failed[entityName] = reason
+
+	return nil
 }

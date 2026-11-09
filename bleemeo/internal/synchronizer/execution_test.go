@@ -18,10 +18,13 @@ package synchronizer
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncagent"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 
 	"github.com/google/go-cmp/cmp"
@@ -742,4 +745,90 @@ func Test_requestLaterSynchronization(t *testing.T) {
 			t.Error("the request was dropped, want it kept for the next execution")
 		}
 	})
+}
+
+var errAgentsUnavailable = errors.New("agents unavailable")
+
+// TestFailOtherEntityNotScheduled checks a failure to list the agents only fails SNMP and vSphere
+// when they are scheduled: the execution's error doesn't name the entities that had nothing to do.
+func TestFailOtherEntityNotScheduled(t *testing.T) {
+	t.Parallel()
+
+	for _, snmpScheduled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("snmp scheduled %v", snmpScheduled), func(t *testing.T) {
+			t.Parallel()
+
+			helper := newHelper(t)
+			defer helper.Close()
+
+			helper.preregisterAgent(t)
+			helper.initSynchronizer(t)
+
+			if err := helper.runOnce(t); err != nil {
+				t.Fatal(err)
+			}
+
+			helper.AddTime(time.Minute)
+			helper.wrapperClientMock.agentsErr = errAgentsUnavailable
+
+			helper.s.l.Lock()
+			helper.s.requestSynchronizationLocked(types.EntityAgent, true)
+
+			if snmpScheduled {
+				helper.s.requestSynchronizationLocked(types.EntitySNMP, false)
+			}
+
+			helper.s.l.Unlock()
+
+			result := helper.runOnceWithResult(t)
+			if !errors.Is(result.err, errAgentsUnavailable) {
+				t.Fatalf("runOnce error = %v, want %v", result.err, errAgentsUnavailable)
+			}
+
+			if _, ok := result.syncPerEntity[types.EntityVSphere]; ok {
+				t.Fatal("vSphere is scheduled, want it not to be")
+			}
+
+			if got := errors.Is(result.err, syncagent.ErrAgentListFirst); got != snmpScheduled {
+				t.Errorf("runOnce error = %v, want %v in it: %v", result.err, syncagent.ErrAgentListFirst, snmpScheduled)
+			}
+		})
+	}
+}
+
+// TestFailOtherEntityBeforeSyncList checks FailOtherEntity refuses to be called before the
+// synchronization list started: the sync types could still change then.
+func TestFailOtherEntityBeforeSyncList(t *testing.T) {
+	t.Parallel()
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.initSynchronizer(t)
+
+	execution := helper.s.newLimitedExecution(false, map[types.EntityName]types.SyncType{
+		types.EntitySNMP: types.SyncTypeNormal,
+	})
+
+	if err := execution.FailOtherEntity(types.EntitySNMP, syncagent.ErrAgentListFirst); !errors.Is(err, types.ErrUnexpectedWorkflow) {
+		t.Errorf("FailOtherEntity() before the sync list = %v, want %v", err, types.ErrUnexpectedWorkflow)
+	}
+
+	execution.syncListStarted = true
+
+	if err := execution.FailOtherEntity(types.EntitySNMP, syncagent.ErrAgentListFirst); err != nil {
+		t.Errorf("FailOtherEntity() = %v, want nil", err)
+	}
+
+	var snmpErr error
+
+	for _, ee := range execution.entities {
+		if ee.entity.Name() == types.EntitySNMP {
+			snmpErr = ee.err
+		}
+	}
+
+	if !errors.Is(snmpErr, syncagent.ErrAgentListFirst) {
+		t.Errorf("SNMP error = %v, want %v", snmpErr, syncagent.ErrAgentListFirst)
+	}
 }

@@ -1356,7 +1356,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			}
 
 			// Newer agent no longer allow apache_status & nginx_status by default.
-			helper.s.option.IsMetricAllowed = func(lbls map[string]string) bool {
+			helper.IsMetricAllowed = func(lbls map[string]string) bool {
 				if lbls[gloutonTypes.LabelName] == "apache_status" || lbls[gloutonTypes.LabelName] == "nginx_status" {
 					return false
 				}
