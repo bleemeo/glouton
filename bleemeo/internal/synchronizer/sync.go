@@ -125,8 +125,11 @@ type Synchronizer struct {
 	lastSync                  time.Time
 	successiveErrors          int
 	firstErrorAt              time.Time
-	maintenanceMode           bool
-	suspendedMode             bool
+	// successiveAuthErrors and firstAuthErrorAt are only used by the synchronization loop.
+	successiveAuthErrors int
+	firstAuthErrorAt     time.Time
+	maintenanceMode      bool
+	suspendedMode        bool
 	// See the comment on realClient about the locking of agentID.
 	agentID          string
 	delayedContainer map[string]time.Time
@@ -142,6 +145,9 @@ type Synchronizer struct {
 	// it. See Execution.LastSuccessfulSync and Execution.ConsecutiveFailures.
 	entityLastSync map[types.EntityName]time.Time
 	entityFailures map[types.EntityName]int
+	// entityRetryAt is, per failed entity, when it can be synchronized again: see
+	// Execution.recordResults.
+	entityRetryAt map[types.EntityName]time.Time
 }
 
 // New return a new Synchronizer.
@@ -176,6 +182,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		forceSync:      make(map[types.EntityName]types.SyncRequest),
 		entityLastSync: make(map[types.EntityName]time.Time),
 		entityFailures: make(map[types.EntityName]int),
+		entityRetryAt:  make(map[types.EntityName]time.Time),
 		nextFullSync:   nextFullSync,
 		fullSyncCount:  fullSyncCount,
 	}
@@ -267,6 +274,7 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		SuccessiveErrors          int
 		EntityLastSync            map[types.EntityName]time.Time
 		EntityFailures            map[types.EntityName]int
+		EntityRetryAt             map[types.EntityName]time.Time
 		FirstErrorAt              time.Time
 		MaintenanceMode           bool
 		AgentID                   string
@@ -290,6 +298,7 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		SuccessiveErrors:          s.successiveErrors,
 		EntityLastSync:            maps.Clone(s.entityLastSync),
 		EntityFailures:            maps.Clone(s.entityFailures),
+		EntityRetryAt:             maps.Clone(s.entityRetryAt),
 		FirstErrorAt:              s.firstErrorAt,
 		MaintenanceMode:           s.maintenanceMode,
 		AgentID:                   s.agentID,
@@ -354,8 +363,8 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	s.firstErrorAt = time.Time{}
 	s.l.Unlock()
 
-	successiveAuthErrors := 0
-	firstAuthErrorAt := time.Time{}
+	s.successiveAuthErrors = 0
+	s.firstAuthErrorAt = time.Time{}
 
 	// We schedule a metric synchronization for in a few minutes to permit
 	// the deactivation of metrics whose item has disappeared between
@@ -380,126 +389,8 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		}
 
 		execution, errSync := s.runOnce(ctx, firstSync)
-		if errSync != nil {
-			s.l.Lock()
-			s.successiveErrors++
 
-			if s.firstErrorAt.IsZero() {
-				s.firstErrorAt = s.now()
-			} else if s.now().Sub(s.firstErrorAt) > 36*time.Hour {
-				if !stateHasValue(agentDysfunctionalCacheKey, s.option.State) {
-					err := s.option.State.Set(agentDysfunctionalCacheKey, s.firstErrorAt.Format(time.RFC3339))
-					if err != nil {
-						logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
-					}
-				}
-			}
-
-			s.l.Unlock()
-
-			if IsAuthenticationError(errSync) {
-				successiveAuthErrors++
-
-				if firstAuthErrorAt.IsZero() {
-					firstAuthErrorAt = s.now()
-				} else if s.now().Sub(firstAuthErrorAt) > 2*time.Hour {
-					if !stateHasValue(agentAuthBrokenCacheKey, s.option.State) {
-						err := s.option.State.Set(agentAuthBrokenCacheKey, firstAuthErrorAt.Format(time.RFC3339))
-						if err != nil {
-							logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
-						}
-					}
-				}
-			} else {
-				firstAuthErrorAt = time.Time{}
-
-				err := s.option.State.Delete(agentAuthBrokenCacheKey)
-				if err != nil {
-					logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
-				}
-			}
-
-			if IsThrottleError(errSync) {
-				deadline := s.throttleDeadline(execution).Add(delay.JitterDelay(15*time.Second, 0.3))
-				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
-			} else {
-				s.l.Lock()
-				successiveErrors := s.successiveErrors
-				s.l.Unlock()
-
-				switch {
-				case stateHasValue(agentAuthBrokenCacheKey, s.option.State):
-					disableDelay := delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
-					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableAuthenticationError)
-					// Ask MQTT to disconnect, but don't block reconnection.
-					// They will be blocked anyway because it's a auth error (so we don't have oauth token required to connect to MQTT)
-					s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
-				case stateHasValue(agentDysfunctionalCacheKey, s.option.State):
-					disableDelay := delay.Exponential(1*time.Minute, 1.55, successiveErrors, time.Hour)
-					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableLongStandingError)
-				default:
-					disableDelay := delay.JitterDelay(
-						delay.Exponential(15*time.Second, 1.55, successiveErrors, 15*time.Minute),
-						0.1,
-					)
-
-					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
-				}
-
-				if IsAuthenticationError(errSync) && successiveAuthErrors == 1 {
-					// we disable only to trigger a reconnection on MQTT
-					s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
-				}
-			}
-
-			switch {
-			case IsAuthenticationError(errSync) && s.agentID != "":
-				fqdnMessage := ""
-
-				fqdn := s.option.Cache.FactsByKey()[s.agentID][syncfacts.FactFQDN].Value
-				if fqdn != "" {
-					fqdnMessage = " with fqdn " + fqdn
-				}
-
-				logger.Printf(
-					"Unable to synchronize with Bleemeo: Unable to login with credentials from state.json. Using agent ID %s%s. Was this server deleted on Bleemeo Cloud platform ?",
-					s.agentID,
-					fqdnMessage,
-				)
-			case IsAuthenticationError(errSync):
-				registrationKey := []rune(s.option.Config.Bleemeo.RegistrationKey)
-				for i := range registrationKey {
-					if i >= 6 && i < len(registrationKey)-4 {
-						registrationKey[i] = '*'
-					}
-				}
-
-				logger.Printf(
-					"Wrong credential for registration. Configuration contains account_id %s and registration_key %s",
-					s.option.Config.Bleemeo.AccountID,
-					string(registrationKey),
-				)
-			default:
-				if s.successiveErrors%5 == 1 {
-					logger.Printf("Unable to synchronize with Bleemeo: %v", errSync)
-				} else {
-					logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", errSync)
-				}
-			}
-		} else {
-			s.l.Lock()
-			s.successiveErrors = 0
-			s.firstErrorAt = time.Time{}
-			s.l.Unlock()
-
-			successiveAuthErrors = 0
-			firstAuthErrorAt = time.Time{}
-
-			err = s.option.State.Delete(agentDysfunctionalCacheKey)
-			if err != nil {
-				logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
-			}
-		}
+		s.handleExecutionResult(execution, errSync)
 
 		minimalDelay = delay.JitterDelay(15*time.Second, 0.05)
 
@@ -509,6 +400,137 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	return nil //nolint:nilerr
+}
+
+// handleExecutionResult tracks the errors of the synchronization loop's executions, and disables
+// the connector for the errors that concern the whole agent.
+func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error) {
+	// An entity synchronized successfully shows the agent works: the other failing entities
+	// only wait for their own retry delay, see Execution.recordResults.
+	if execution != nil && execution.synchronizedAny() {
+		s.l.Lock()
+		s.successiveErrors = 0
+		s.firstErrorAt = time.Time{}
+		s.l.Unlock()
+
+		err := s.option.State.Delete(agentDysfunctionalCacheKey)
+		if err != nil {
+			logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
+		}
+	}
+
+	if errSync != nil {
+		s.l.Lock()
+		s.successiveErrors++
+
+		if s.firstErrorAt.IsZero() {
+			s.firstErrorAt = s.now()
+		} else if s.now().Sub(s.firstErrorAt) > 36*time.Hour {
+			if !stateHasValue(agentDysfunctionalCacheKey, s.option.State) {
+				err := s.option.State.Set(agentDysfunctionalCacheKey, s.firstErrorAt.Format(time.RFC3339))
+				if err != nil {
+					logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
+				}
+			}
+		}
+
+		s.l.Unlock()
+
+		if IsAuthenticationError(errSync) {
+			s.successiveAuthErrors++
+
+			if s.firstAuthErrorAt.IsZero() {
+				s.firstAuthErrorAt = s.now()
+			} else if s.now().Sub(s.firstAuthErrorAt) > 2*time.Hour {
+				if !stateHasValue(agentAuthBrokenCacheKey, s.option.State) {
+					err := s.option.State.Set(agentAuthBrokenCacheKey, s.firstAuthErrorAt.Format(time.RFC3339))
+					if err != nil {
+						logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
+					}
+				}
+			}
+		} else {
+			s.firstAuthErrorAt = time.Time{}
+
+			err := s.option.State.Delete(agentAuthBrokenCacheKey)
+			if err != nil {
+				logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
+			}
+		}
+
+		if IsThrottleError(errSync) {
+			deadline := s.throttleDeadline(execution).Add(delay.JitterDelay(15*time.Second, 0.3))
+			s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
+		} else {
+			s.l.Lock()
+			successiveErrors := s.successiveErrors
+			s.l.Unlock()
+
+			switch {
+			case stateHasValue(agentAuthBrokenCacheKey, s.option.State):
+				disableDelay := delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
+				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableAuthenticationError)
+				// Ask MQTT to disconnect, but don't block reconnection.
+				// They will be blocked anyway because it's a auth error (so we don't have oauth token required to connect to MQTT)
+				s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
+			case stateHasValue(agentDysfunctionalCacheKey, s.option.State):
+				disableDelay := delay.Exponential(1*time.Minute, 1.55, successiveErrors, time.Hour)
+				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableLongStandingError)
+			case IsAuthenticationError(errSync):
+				// Other errors don't disable the whole connector: each failed entity waits
+				// for its own retry delay, see Execution.recordResults.
+				disableDelay := delay.JitterDelay(
+					delay.Exponential(15*time.Second, 1.55, successiveErrors, 15*time.Minute),
+					0.1,
+				)
+
+				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
+			}
+
+			if IsAuthenticationError(errSync) && s.successiveAuthErrors == 1 {
+				// we disable only to trigger a reconnection on MQTT
+				s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
+			}
+		}
+
+		switch {
+		case IsAuthenticationError(errSync) && s.agentID != "":
+			fqdnMessage := ""
+
+			fqdn := s.option.Cache.FactsByKey()[s.agentID][syncfacts.FactFQDN].Value
+			if fqdn != "" {
+				fqdnMessage = " with fqdn " + fqdn
+			}
+
+			logger.Printf(
+				"Unable to synchronize with Bleemeo: Unable to login with credentials from state.json. Using agent ID %s%s. Was this server deleted on Bleemeo Cloud platform ?",
+				s.agentID,
+				fqdnMessage,
+			)
+		case IsAuthenticationError(errSync):
+			registrationKey := []rune(s.option.Config.Bleemeo.RegistrationKey)
+			for i := range registrationKey {
+				if i >= 6 && i < len(registrationKey)-4 {
+					registrationKey[i] = '*'
+				}
+			}
+
+			logger.Printf(
+				"Wrong credential for registration. Configuration contains account_id %s and registration_key %s",
+				s.option.Config.Bleemeo.AccountID,
+				string(registrationKey),
+			)
+		default:
+			if s.successiveErrors%5 == 1 {
+				logger.Printf("Unable to synchronize with Bleemeo: %v", errSync)
+			} else {
+				logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", errSync)
+			}
+		}
+	} else {
+		s.successiveAuthErrors = 0
+		s.firstAuthErrorAt = time.Time{}
+	}
 }
 
 // scheduleMetricSync requests a synchronization of the metrics after the given delay, in a new goroutine.

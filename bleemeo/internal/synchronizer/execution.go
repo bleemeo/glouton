@@ -26,6 +26,7 @@ import (
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/logger"
 )
 
@@ -333,7 +334,11 @@ func (e *Execution) run(ctx context.Context) error {
 		e.applyNeedSynchronization(ctx)
 	}
 
+	// Before checkLinkedSynchronization, so that an entity left out doesn't make its linked
+	// entities synchronize, and after, to leave out the linked entities that are in backoff.
+	e.skipEntitiesInBackoff()
 	e.checkLinkedSynchronization()
+	e.skipEntitiesInBackoff()
 	e.dropFulfilledLaterRequests()
 	e.syncListStarted = true
 
@@ -617,11 +622,60 @@ func (e *Execution) recordResults() {
 		case ee.synced:
 			e.synchronizer.entityLastSync[name] = e.startedAt
 			delete(e.synchronizer.entityFailures, name)
+			delete(e.synchronizer.entityRetryAt, name)
 		case ee.syncType != types.SyncTypeNone && ee.err != nil &&
 			!errors.Is(ee.err, errSkippedExecution) && !errors.Is(ee.err, errConnectorTemporaryDisabled):
 			e.synchronizer.entityFailures[name]++
+
+			// The authentication and throttle errors concern the whole agent: Synchronizer.Run
+			// disables the whole connector for them.
+			if !IsAuthenticationError(ee.err) && !IsThrottleError(ee.err) {
+				retryDelay := delay.JitterDelay(
+					delay.Exponential(15*time.Second, 1.55, e.synchronizer.entityFailures[name], 15*time.Minute),
+					0.1,
+				)
+				e.synchronizer.entityRetryAt[name] = e.synchronizer.now().Add(retryDelay)
+			}
 		}
 	}
+}
+
+// skipEntitiesInBackoff leaves out of this execution the entities that failed and whose retry
+// delay isn't over (see recordResults), so that an entity failing again and again doesn't keep
+// calling the API. Their synchronization is requested again for the end of the delay.
+func (e *Execution) skipEntitiesInBackoff() {
+	if e.isLimitedExecution {
+		return
+	}
+
+	e.synchronizer.l.Lock()
+	defer e.synchronizer.l.Unlock()
+
+	for idx, row := range e.entities {
+		retryAt, ok := e.synchronizer.entityRetryAt[row.entity.Name()]
+		if row.syncType == types.SyncTypeNone || row.err != nil || !ok || !e.startedAt.Before(retryAt) {
+			continue
+		}
+
+		e.synchronizer.requestLaterSynchronizationLocked(
+			row.entity.Name(),
+			row.syncType == types.SyncTypeForceCacheRefresh,
+			retryAt.Sub(e.synchronizer.now()),
+		)
+
+		e.entities[idx].syncType = types.SyncTypeNone
+	}
+}
+
+// synchronizedAny returns whether an entity was synchronized successfully.
+func (e *Execution) synchronizedAny() bool {
+	for _, ee := range e.entities {
+		if ee.synced {
+			return true
+		}
+	}
+
+	return false
 }
 
 // failedEntities returns the entities requested with a cache refresh that failed. The skipped
