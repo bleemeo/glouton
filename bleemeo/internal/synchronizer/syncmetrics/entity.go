@@ -55,6 +55,9 @@ type SyncMetrics struct {
 	registrationMetrics map[metricStateKey]int
 	// metricsStatePublished tells whether a synchronization published the metrics state yet.
 	metricsStatePublished bool
+	// waitingDependency tells whether the last synchronization left metrics waiting for their
+	// container, service or monitor to be registered.
+	waitingDependency bool
 }
 
 // New returns the entity. startedAt returns when Glouton started.
@@ -175,12 +178,22 @@ func (s *SyncMetrics) DiagnosticArchive(_ context.Context, archive gloutonTypes.
 
 // needSynchronization returns whether a registration failure is due for a retry, a discovery or
 // a change of the metric annotations happened since the metrics were last synchronized
-// successfully, or the number of metrics changed.
+// successfully, the number of metrics changed, or metrics wait for a dependency synchronized
+// since.
 func (s *SyncMetrics) needSynchronization(execution types.SynchronizationExecution) bool {
 	_, lastDiscovery := s.option.Discovery.GetLatestDiscovery()
 	currentMetricCount := s.option.Store.MetricsCount()
 	lastAnnotationChange := s.option.LastMetricAnnotationChange()
 	lastSuccessfulSync := execution.LastSuccessfulSync(types.EntityMetric)
+
+	dependencySynced := false
+
+	// The entities a metric may wait for to be registered.
+	for _, dependency := range []types.EntityName{types.EntityContainer, types.EntityService, types.EntityMonitor} {
+		if execution.LastSuccessfulSync(dependency).After(lastSuccessfulSync) {
+			dependencySynced = true
+		}
+	}
 
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -188,7 +201,8 @@ func (s *SyncMetrics) needSynchronization(execution types.SynchronizationExecuti
 	return execution.StartedAt().After(s.metricRetryAt) ||
 		lastSuccessfulSync.Before(lastDiscovery) ||
 		lastSuccessfulSync.Before(lastAnnotationChange) ||
-		s.lastMetricCount != currentMetricCount
+		s.lastMetricCount != currentMetricCount ||
+		(s.waitingDependency && dependencySynced)
 }
 
 // logThrottle logs a message at most once per hour and per key, see types.LogThrottle.
@@ -204,18 +218,15 @@ type syncMetricsExecution struct {
 	// stagedNotRegistered is filterMetrics' count for this execution, published by
 	// publishMetricsState.
 	stagedNotRegistered map[metricStateKey]int
+	// dependencyMissing tells whether this execution left metrics waiting for a dependency,
+	// see SyncMetrics.waitingDependency.
+	dependencyMissing bool
 }
 
 // NeedSynchronization synchronizes the metrics when a registration failure is due for a retry,
-// after a discovery or a change of the metric annotations, and when the number of metrics
-// changes. The metrics also need the containers and the monitors they belong to.
+// after a discovery or a change of the metric annotations, when the number of metrics changes,
+// and once the container, service or monitor that metrics wait for may be registered.
 func (s *syncMetricsExecution) NeedSynchronization(_ context.Context) (bool, error) {
-	for _, dependency := range []types.EntityName{types.EntityContainer, types.EntityMonitor} {
-		if err := s.execution.RequestLinkedSynchronization(types.EntityMetric, dependency); err != nil {
-			return false, err
-		}
-	}
-
 	return s.needSynchronization(s.execution), nil
 }
 

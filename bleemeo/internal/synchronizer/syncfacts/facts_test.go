@@ -88,8 +88,8 @@ type fakeState struct {
 
 func (fakeState) BleemeoCredentials() (string, string) { return testAgentID, "" }
 
-// fakeExecution gives the local facts, the cache and the client to the entity, and records the
-// linked synchronizations it requests. Any other call panics.
+// fakeExecution gives the local facts, the cache, the client and the last successful
+// synchronizations to the entity. Any other call panics.
 type fakeExecution struct {
 	executiontest.Recorder
 
@@ -97,6 +97,7 @@ type fakeExecution struct {
 	cache         *cache.Cache
 	facts         *facts.FactProviderMock
 	onlyEssential bool
+	lastSync      map[types.EntityName]time.Time
 }
 
 func newFakeExecution(local map[string]string, remote ...bleemeoTypes.AgentFact) *fakeExecution {
@@ -115,6 +116,10 @@ func newFakeExecution(local map[string]string, remote ...bleemeoTypes.AgentFact)
 func (e *fakeExecution) BleemeoAPIClient() types.Client { return e.client }
 func (e *fakeExecution) IsOnlyEssential() bool          { return e.onlyEssential }
 func (e *fakeExecution) StartedAt() time.Time           { return time.Time{} }
+
+func (e *fakeExecution) LastSuccessfulSync(entityName types.EntityName) time.Time {
+	return e.lastSync[entityName]
+}
 
 func (e *fakeExecution) Option() types.Option {
 	return types.Option{
@@ -335,21 +340,14 @@ func needSync(t *testing.T, s *SyncFacts, execution *fakeExecution, want bool) {
 
 	defer e.FinishExecution(t.Context())
 
-	execution.Linked = nil
-
 	need, err := e.NeedSynchronization(t.Context())
 	if err != nil || need != want {
 		t.Errorf("NeedSynchronization() = %v, %v, want %v", need, err, want)
 	}
-
-	wantLinked := [][2]types.EntityName{{types.EntityFact, types.EntitySNMP}}
-	if diff := cmp.Diff(wantLinked, execution.Linked); diff != "" {
-		t.Errorf("linked synchronizations mismatch (-want +got)\n%s", diff)
-	}
 }
 
 // TestNeedSynchronization checks the facts are synchronized when fact_updated_at changes, and
-// with the SNMP agents.
+// after the SNMP agents synchronized.
 func TestNeedSynchronization(t *testing.T) {
 	t.Parallel()
 
@@ -370,6 +368,13 @@ func TestNeedSynchronization(t *testing.T) {
 
 	// Another fact changing alone doesn't trigger a synchronization.
 	execution.facts.SetFact(FactFQDN, "renamed.example.com")
+	needSync(t, s, execution, false)
+
+	// The SNMP agents synchronized since the facts did.
+	execution.lastSync = map[types.EntityName]time.Time{types.EntitySNMP: time.Unix(2, 0), types.EntityFact: time.Unix(1, 0)}
+	needSync(t, s, execution, true)
+
+	execution.lastSync[types.EntityFact] = execution.lastSync[types.EntitySNMP]
 	needSync(t, s, execution, false)
 
 	execution.facts.SetFact(facts.FactUpdatedAt, "t2")

@@ -189,7 +189,6 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			wantSync: map[types.EntityName]types.SyncType{
 				types.EntityAgent:   types.SyncTypeForceCacheRefresh,
 				types.EntityMonitor: types.SyncTypeNormal,
-				types.EntityMetric:  types.SyncTypeNormal,
 			},
 		},
 		{
@@ -205,13 +204,14 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			prepare: func() {
 				snmpOnline = 1
 			},
+			wantSync: map[types.EntityName]types.SyncType{types.EntitySNMP: types.SyncTypeNormal},
+		},
+		{
 			// The SNMP agent was registered by the first full synchronization, which synchronized
-			// the facts before it: its facts are registered now.
+			// the facts before it: its facts are registered once the SNMP agents synchronized.
+			name:      "facts after the SNMP agents",
 			wantCalls: map[string]int{"ListFacts": 1, "RegisterFact": 1},
-			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityFact: types.SyncTypeNormal,
-				types.EntitySNMP: types.SyncTypeNormal,
-			},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityFact: types.SyncTypeNormal},
 		},
 		{
 			name: "vSphere device discovered",
@@ -348,7 +348,6 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			wantSync: map[types.EntityName]types.SyncType{
 				types.EntityAgent:   types.SyncTypeForceCacheRefresh,
 				types.EntityMonitor: types.SyncTypeNormal,
-				types.EntityMetric:  types.SyncTypeNormal,
 			},
 		},
 		{
@@ -372,10 +371,7 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			},
 			// The failed update is retried a minute later.
 			wantCalls: map[string]int{"GetMonitorByID": 1},
-			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityMonitor: types.SyncTypeNormal,
-				types.EntityMetric:  types.SyncTypeNormal,
-			},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMonitor: types.SyncTypeNormal},
 		},
 		{
 			name: "new metric",
@@ -628,17 +624,14 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			wantErr:  true,
 		},
 		{
-			// Only the monitors are refreshed again, with the metrics which need them: not the
-			// whole full synchronization.
+			// Only the monitors are refreshed again: not the whole full synchronization. No
+			// metric waits for them, the metrics aren't refreshed with them.
 			name: "only the monitors refreshed",
 			prepare: func() {
 				helper.wrapperClientMock.monitorsErr = nil
 			},
-			wantCalls: map[string]int{"ListActiveMetrics": 1, "ListMonitors": 1},
-			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityMonitor: types.SyncTypeForceCacheRefresh,
-				types.EntityMetric:  types.SyncTypeForceCacheRefresh,
-			},
+			wantCalls: map[string]int{"ListMonitors": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMonitor: types.SyncTypeForceCacheRefresh},
 		},
 		{
 			name: "nothing changed after the monitors",
@@ -671,11 +664,8 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 				helper.AddTime(time.Minute)
 			},
 			wantCalls: map[string]int{"GetMonitorByID": 1},
-			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityMonitor: types.SyncTypeNormal,
-				types.EntityMetric:  types.SyncTypeNormal,
-			},
-			wantErr: true,
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMonitor: types.SyncTypeNormal},
+			wantErr:   true,
 		},
 		{
 			name: "monitor update retried",
@@ -685,10 +675,7 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 				helper.AddTime(time.Minute)
 			},
 			wantCalls: map[string]int{"GetMonitorByID": 1},
-			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityMonitor: types.SyncTypeNormal,
-				types.EntityMetric:  types.SyncTypeNormal,
-			},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMonitor: types.SyncTypeNormal},
 		},
 	}
 

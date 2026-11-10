@@ -95,11 +95,8 @@ func TestFullSynchronizationPartialFailure(t *testing.T) {
 			t.Fatal(result.err)
 		}
 
-		// The metrics need the monitors: they are refreshed with them.
-		wantSync := map[types.EntityName]types.SyncType{
-			types.EntityMonitor: types.SyncTypeForceCacheRefresh,
-			types.EntityMetric:  types.SyncTypeForceCacheRefresh,
-		}
+		// No metric waits for the monitors: the metrics aren't refreshed with them.
+		wantSync := map[types.EntityName]types.SyncType{types.EntityMonitor: types.SyncTypeForceCacheRefresh}
 		if diff := cmp.Diff(wantSync, result.syncPerEntity); diff != "" {
 			t.Errorf("synchronized entities mismatch (-want +got)\n%s", diff)
 		}
