@@ -389,6 +389,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			"docker",
 			"lo",
 			"veth",
+			"cali",
 			"virbr",
 			"vnet",
 			"isatap",
