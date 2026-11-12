@@ -109,6 +109,9 @@ type Synchronizer struct {
 	metrics     *syncmetrics.SyncMetrics
 
 	requestCounter atomic.Uint32
+	// authenticatedSuccessCounter counts the authenticated requests the API answered without
+	// error: see Execution.calledAPISuccessfully.
+	authenticatedSuccessCounter atomic.Uint32
 	// realClient and agentID are only written by the synchronization loop
 	// goroutine, while holding l. The synchronization loop may read them
 	// without the lock, any other goroutine must hold l to read them.
@@ -145,9 +148,10 @@ type Synchronizer struct {
 	// it. See Execution.LastSuccessfulSync and Execution.ConsecutiveFailures.
 	entityLastSync map[types.EntityName]time.Time
 	entityFailures map[types.EntityName]int
-	// entityRetryAt is, per failed entity, when it can be synchronized again: see
-	// Execution.recordResults.
-	entityRetryAt map[types.EntityName]time.Time
+	// entityRetryAt is, per failed entity, when it can be synchronized again, and
+	// entityFirstFailureAt when the failures in a row started: see Execution.recordResults.
+	entityRetryAt        map[types.EntityName]time.Time
+	entityFirstFailureAt map[types.EntityName]time.Time
 }
 
 // New return a new Synchronizer.
@@ -185,6 +189,8 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		entityRetryAt:  make(map[types.EntityName]time.Time),
 		nextFullSync:   nextFullSync,
 		fullSyncCount:  fullSyncCount,
+
+		entityFirstFailureAt: make(map[types.EntityName]time.Time),
 	}
 
 	s.info = syncinfo.New(&s.requestCounter, s.now)
@@ -275,6 +281,8 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		EntityLastSync            map[types.EntityName]time.Time
 		EntityFailures            map[types.EntityName]int
 		EntityRetryAt             map[types.EntityName]time.Time
+		EntityFirstFailureAt      map[types.EntityName]time.Time
+		AuthenticatedSuccesses    uint32
 		FirstErrorAt              time.Time
 		MaintenanceMode           bool
 		AgentID                   string
@@ -299,6 +307,8 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		EntityLastSync:            maps.Clone(s.entityLastSync),
 		EntityFailures:            maps.Clone(s.entityFailures),
 		EntityRetryAt:             maps.Clone(s.entityRetryAt),
+		EntityFirstFailureAt:      maps.Clone(s.entityFirstFailureAt),
+		AuthenticatedSuccesses:    s.authenticatedSuccessCounter.Load(),
 		FirstErrorAt:              s.firstErrorAt,
 		MaintenanceMode:           s.maintenanceMode,
 		AgentID:                   s.agentID,
@@ -405,9 +415,10 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 // handleExecutionResult tracks the errors of the synchronization loop's executions, and disables
 // the connector for the errors that concern the whole agent.
 func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error) {
-	// An entity synchronized successfully shows the agent works: the other failing entities
-	// only wait for their own retry delay, see Execution.recordResults.
-	if execution != nil && execution.synchronizedAny() {
+	// An authenticated request the API answered shows the agent works with it: the failing
+	// entities only wait for their own retry delay, see Execution.recordResults. An entity that
+	// succeeds without calling the API, like SNMP without targets, shows nothing.
+	if execution != nil && execution.calledAPISuccessfully() {
 		s.l.Lock()
 		s.successiveErrors = 0
 		s.firstErrorAt = time.Time{}
@@ -425,7 +436,7 @@ func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error
 
 		if s.firstErrorAt.IsZero() {
 			s.firstErrorAt = s.now()
-		} else if s.now().Sub(s.firstErrorAt) > 36*time.Hour {
+		} else if s.now().Sub(s.firstErrorAt) > longStandingFailure {
 			if !stateHasValue(agentDysfunctionalCacheKey, s.option.State) {
 				err := s.option.State.Set(agentDysfunctionalCacheKey, s.firstErrorAt.Format(time.RFC3339))
 				if err != nil {
@@ -1075,6 +1086,8 @@ func (s *Synchronizer) buildClient() (*bleemeo.Client, error) {
 		UserAgentHeader: version.UserAgent(),
 		RequestCounter:  &s.requestCounter,
 		EnableLogger:    true,
+
+		AuthenticatedSuccessCounter: &s.authenticatedSuccessCounter,
 	}
 	cl := &http.Client{
 		Transport: gloutonTypes.NewHTTPTransport(tlsConfig, transportOpts),
@@ -1185,10 +1198,9 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 	err := execution.run(ctx)
 	if execution.forceCacheRefreshForAll() && ctx.Err() == nil {
 		// The full synchronization is done even when some entities failed: only they are
-		// refreshed again, on the next execution. Redoing the full synchronization would refresh
-		// every entity again, with all their API calls, until the failing ones succeed.
-		failed := execution.failedEntities()
-
+		// refreshed again, after their retry delay (see Execution.recordResults). Redoing the full
+		// synchronization would refresh every entity again, with all their API calls, until the
+		// failing ones succeed.
 		s.option.Cache.Save()
 
 		s.fullSyncCount++
@@ -1201,14 +1213,6 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 			s.option.ReloadState.SetFullSyncCount(s.fullSyncCount)
 			s.option.ReloadState.SetNextFullSync(s.nextFullSync)
 		}
-
-		s.l.Lock()
-
-		for _, entityName := range failed {
-			s.requestSynchronizationLocked(entityName, true)
-		}
-
-		s.l.Unlock()
 
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}

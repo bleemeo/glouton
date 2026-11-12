@@ -102,6 +102,48 @@ func TestFullSynchronizationPartialFailure(t *testing.T) {
 		}
 	})
 
+	t.Run("cache refresh failing twice", func(t *testing.T) {
+		helper := newFullSyncHelper(t)
+		defer helper.Close()
+
+		helper.wrapperClientMock.servicesErr = errServicesUnavailable
+
+		if result := helper.runOnceWithResult(t); result.err == nil {
+			t.Fatal("runOnce succeeded, want the services' error")
+		}
+
+		// The retry of the cache refresh fails too.
+		helper.AddTime(time.Minute)
+
+		result := helper.runOnceWithResult(t)
+		if result.err == nil {
+			t.Fatal("runOnce succeeded, want the services' error")
+		}
+
+		if result.syncPerEntity[types.EntityService] != types.SyncTypeForceCacheRefresh {
+			t.Fatalf("services synchronized with %s, want %s", result.syncPerEntity[types.EntityService], types.SyncTypeForceCacheRefresh)
+		}
+
+		// A normal synchronization of the services is requested meanwhile: it mustn't replace
+		// the cache refresh.
+		helper.wrapperClientMock.servicesErr = nil
+
+		helper.s.l.Lock()
+		helper.s.requestSynchronizationLocked(types.EntityService, false)
+		helper.s.l.Unlock()
+
+		helper.AddTime(2 * time.Minute)
+
+		result = helper.runOnceWithResult(t)
+		if result.err != nil {
+			t.Fatal(result.err)
+		}
+
+		if result.syncPerEntity[types.EntityService] != types.SyncTypeForceCacheRefresh {
+			t.Errorf("services synchronized with %s, want %s", result.syncPerEntity[types.EntityService], types.SyncTypeForceCacheRefresh)
+		}
+	})
+
 	t.Run("every entity failing", func(t *testing.T) {
 		helper := newFullSyncHelper(t)
 		defer helper.Close()

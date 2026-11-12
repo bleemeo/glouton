@@ -71,7 +71,10 @@ func (vSphereVMMock) LatestError() error       { return nil }
 // Any change of the calls made fails it.
 // The steps stay less than 15 minutes apart, except the full synchronization, so the periodic
 // duplicated agent check, jittered between 15 and 25 minutes, always runs at the same steps.
-var errMonitorsUnavailable = errors.New("monitors unavailable")
+var (
+	errMonitorsUnavailable = errors.New("monitors unavailable")
+	errServicesUnavailable = errors.New("services unavailable")
+)
 
 const metricMemUsed = "mem_used"
 

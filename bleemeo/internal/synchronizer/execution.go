@@ -33,10 +33,13 @@ import (
 type Execution struct {
 	client              types.Client
 	initialRequestCount uint32
-	startedAt           time.Time
-	onlyEssential       bool
-	isNewAgent          bool
-	isLimitedExecution  bool
+	// initialAuthenticatedSuccessCount is Synchronizer.authenticatedSuccessCounter when the
+	// execution started.
+	initialAuthenticatedSuccessCount uint32
+	startedAt                        time.Time
+	onlyEssential                    bool
+	isNewAgent                       bool
+	isLimitedExecution               bool
 
 	updateThresholds bool
 	callUpdateLabels bool
@@ -60,6 +63,15 @@ type EntityExecution struct {
 }
 
 var errSkippedExecution = errors.New("execution skipped to due maintenance mode or similar reason")
+
+const (
+	// entityMaxRetryDelay is the longest a failed entity waits before its next attempt.
+	entityMaxRetryDelay = 15 * time.Minute
+	// longStandingFailure is how long an entity, or the whole agent, fails before it waits up to
+	// longStandingMaxRetryDelay between attempts.
+	longStandingFailure       = 36 * time.Hour
+	longStandingMaxRetryDelay = time.Hour
+)
 
 func (s *Synchronizer) getEntityExecution(entitySync map[types.EntityName]types.SyncType, limitedExec bool) []EntityExecution {
 	entities := make([]EntityExecution, 0, len(s.synchronizers))
@@ -107,10 +119,12 @@ func (s *Synchronizer) newExecution(onlyEssential bool, isNewAgent bool) *Execut
 		synchronizer:        s,
 		client:              s.getClient(),
 		initialRequestCount: s.requestCounter.Load(),
-		startedAt:           startedAt,
-		onlyEssential:       onlyEssential,
-		isNewAgent:          isNewAgent,
-		entities:            s.getEntityExecution(dueSync, false),
+
+		initialAuthenticatedSuccessCount: s.authenticatedSuccessCounter.Load(),
+		startedAt:                        startedAt,
+		onlyEssential:                    onlyEssential,
+		isNewAgent:                       isNewAgent,
+		entities:                         s.getEntityExecution(dueSync, false),
 		// A copy: s.forceSync keeps being updated by the other goroutines.
 		deferredSync: maps.Clone(pendingSync),
 	}
@@ -128,10 +142,12 @@ func (s *Synchronizer) newLimitedExecution(onlyEssential bool, entities map[type
 		synchronizer:        s,
 		client:              s.getClient(),
 		initialRequestCount: s.requestCounter.Load(),
-		startedAt:           s.now(),
-		onlyEssential:       onlyEssential,
-		entities:            s.getEntityExecution(entities, true),
-		isLimitedExecution:  true,
+
+		initialAuthenticatedSuccessCount: s.authenticatedSuccessCounter.Load(),
+		startedAt:                        s.now(),
+		onlyEssential:                    onlyEssential,
+		entities:                         s.getEntityExecution(entities, true),
+		isLimitedExecution:               true,
 	}
 
 	return execution
@@ -609,8 +625,12 @@ func (e *Execution) allForcedCacheRefresh() bool {
 }
 
 // recordResults records, for each entity the execution synchronized, when it last succeeded and
-// how many times in a row it failed: a success resets the count. An entity skipped, or not run
-// because the connector is disabled, is left as it was.
+// how many times in a row it failed: a success resets the count. An entity skipped is left as
+// it was: run requests it again.
+//
+// A cache refresh that failed, or didn't run because the connector is disabled, is requested
+// again for the entity's next attempt: a normal synchronization succeeding meanwhile would
+// otherwise lose it.
 func (e *Execution) recordResults() {
 	e.synchronizer.l.Lock()
 	defer e.synchronizer.l.Unlock()
@@ -618,26 +638,60 @@ func (e *Execution) recordResults() {
 	for _, ee := range e.entities {
 		name := ee.entity.Name()
 
-		switch {
-		case ee.synced:
+		if ee.synced {
 			e.synchronizer.entityLastSync[name] = e.startedAt
 			delete(e.synchronizer.entityFailures, name)
 			delete(e.synchronizer.entityRetryAt, name)
-		case ee.syncType != types.SyncTypeNone && ee.err != nil &&
-			!errors.Is(ee.err, errSkippedExecution) && !errors.Is(ee.err, errConnectorTemporaryDisabled):
-			e.synchronizer.entityFailures[name]++
+			delete(e.synchronizer.entityFirstFailureAt, name)
 
-			// The authentication and throttle errors concern the whole agent: Synchronizer.Run
-			// disables the whole connector for them.
-			if !IsAuthenticationError(ee.err) && !IsThrottleError(ee.err) {
-				retryDelay := delay.JitterDelay(
-					delay.Exponential(15*time.Second, 1.55, e.synchronizer.entityFailures[name], 15*time.Minute),
-					0.1,
-				)
-				e.synchronizer.entityRetryAt[name] = e.synchronizer.now().Add(retryDelay)
-			}
+			continue
+		}
+
+		if ee.syncType == types.SyncTypeNone || ee.err == nil || errors.Is(ee.err, errSkippedExecution) {
+			continue
+		}
+
+		var retryDelay time.Duration
+
+		if !errors.Is(ee.err, errConnectorTemporaryDisabled) {
+			retryDelay = e.recordFailureLocked(name, ee.err)
+		}
+
+		if ee.syncType == types.SyncTypeForceCacheRefresh {
+			e.synchronizer.requestLaterSynchronizationLocked(name, true, retryDelay)
 		}
 	}
+}
+
+// recordFailureLocked counts a failure of the entity and returns its retry delay. The delay grows
+// with the failures in a row, up to entityMaxRetryDelay, or longStandingMaxRetryDelay once the
+// entity has failed for longStandingFailure. The authentication and throttle errors concern the
+// whole agent and get no delay: Synchronizer.Run disables the whole connector for them.
+// Caller must hold the lock e.synchronizer.l.
+func (e *Execution) recordFailureLocked(name types.EntityName, err error) time.Duration {
+	s := e.synchronizer
+
+	s.entityFailures[name]++
+
+	firstFailureAt, ok := s.entityFirstFailureAt[name]
+	if !ok {
+		firstFailureAt = e.startedAt
+		s.entityFirstFailureAt[name] = firstFailureAt
+	}
+
+	if IsAuthenticationError(err) || IsThrottleError(err) {
+		return 0
+	}
+
+	maxDelay := entityMaxRetryDelay
+	if s.now().Sub(firstFailureAt) > longStandingFailure {
+		maxDelay = longStandingMaxRetryDelay
+	}
+
+	retryDelay := delay.JitterDelay(delay.Exponential(15*time.Second, 1.55, s.entityFailures[name], maxDelay), 0.1)
+	s.entityRetryAt[name] = s.now().Add(retryDelay)
+
+	return retryDelay
 }
 
 // skipEntitiesInBackoff leaves out of this execution the entities that failed and whose retry
@@ -667,29 +721,10 @@ func (e *Execution) skipEntitiesInBackoff() {
 	}
 }
 
-// synchronizedAny returns whether an entity was synchronized successfully.
-func (e *Execution) synchronizedAny() bool {
-	for _, ee := range e.entities {
-		if ee.synced {
-			return true
-		}
-	}
-
-	return false
-}
-
-// failedEntities returns the entities requested with a cache refresh that failed. The skipped
-// entities are left out: run already requests them again.
-func (e *Execution) failedEntities() []types.EntityName {
-	var failed []types.EntityName
-
-	for _, ee := range e.entities {
-		if ee.syncType == types.SyncTypeForceCacheRefresh && ee.err != nil && !errors.Is(ee.err, errSkippedExecution) {
-			failed = append(failed, ee.entity.Name())
-		}
-	}
-
-	return failed
+// calledAPISuccessfully returns whether the API answered an authenticated request without error
+// during the execution.
+func (e *Execution) calledAPISuccessfully() bool {
+	return e.synchronizer.authenticatedSuccessCounter.Load() != e.initialAuthenticatedSuccessCount
 }
 
 // synchronizersCall calls f on each entity which can run. f updates the entity's row in

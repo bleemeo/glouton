@@ -118,9 +118,14 @@ func TestHandleExecutionResult(t *testing.T) {
 		name string
 		// synchronizedEvery is how often an execution also synchronizes an entity, zero for never.
 		synchronizedEvery time.Duration
+		// withoutAPI is whether that entity succeeds without calling the API, like SNMP without
+		// targets.
+		withoutAPI        bool
 		errSync           error
 		wantDysfunctional bool
 		wantDisableReason bleemeoTypes.DisableReason
+		// wantDisabledFor is the least the connector stays disabled after the last execution.
+		wantDisabledFor time.Duration
 	}{
 		{
 			name:              "an entity failing, the others working",
@@ -134,10 +139,23 @@ func TestHandleExecutionResult(t *testing.T) {
 			wantDisableReason: bleemeoTypes.DisableLongStandingError,
 		},
 		{
-			name:              "authentication error",
+			name:              "every entity calling the API failing",
 			synchronizedEvery: time.Hour,
+			withoutAPI:        true,
+			errSync:           errEntityFailed,
+			wantDysfunctional: true,
+			wantDisableReason: bleemeoTypes.DisableLongStandingError,
+		},
+		{
+			// The entities with nothing to do succeed without calling the API: the delay keeps
+			// growing, up to 5 days.
+			name:              "authentication error",
+			synchronizedEvery: 15 * time.Minute,
+			withoutAPI:        true,
 			errSync:           authErr,
+			wantDysfunctional: true,
 			wantDisableReason: bleemeoTypes.DisableAuthenticationError,
+			wantDisabledFor:   24 * time.Hour,
 		},
 	}
 
@@ -152,10 +170,18 @@ func TestHandleExecutionResult(t *testing.T) {
 			start := helper.Now()
 
 			for helper.Now().Sub(start) < 37*time.Hour {
-				execution := &Execution{entities: []EntityExecution{{syncType: types.SyncTypeNormal, err: tt.errSync}}}
+				execution := &Execution{
+					synchronizer:                     helper.s,
+					initialAuthenticatedSuccessCount: helper.s.authenticatedSuccessCounter.Load(),
+					entities:                         []EntityExecution{{syncType: types.SyncTypeNormal, err: tt.errSync}},
+				}
 
 				if tt.synchronizedEvery != 0 && helper.Now().Sub(start)%tt.synchronizedEvery == 0 {
 					execution.entities = append(execution.entities, EntityExecution{syncType: types.SyncTypeNormal, synced: true})
+
+					if !tt.withoutAPI {
+						helper.s.authenticatedSuccessCounter.Add(1)
+					}
 				}
 
 				helper.s.handleExecutionResult(execution, tt.errSync)
@@ -171,8 +197,58 @@ func TestHandleExecutionResult(t *testing.T) {
 				t.Errorf("agent dysfunctional = %v, want %v", got, tt.wantDysfunctional)
 			}
 
-			if _, reason := helper.s.getDisabledUntil(); reason != tt.wantDisableReason {
+			until, reason := helper.s.getDisabledUntil()
+			if reason != tt.wantDisableReason {
 				t.Errorf("connector disabled for %s, want %s", reason, tt.wantDisableReason)
+			}
+
+			// The clock moved by 15 minutes after the last execution.
+			if disabledFor := until.Sub(helper.Now().Add(-15 * time.Minute)); tt.wantDisabledFor != 0 && disabledFor < tt.wantDisabledFor {
+				t.Errorf("connector disabled for %s after the last execution, want at least %s", disabledFor, tt.wantDisabledFor)
+			}
+		})
+	}
+}
+
+// TestLongStandingEntityFailure checks an entity failing for more than 36 hours waits up to an
+// hour between its attempts, instead of 15 minutes, and that a success resets it.
+func TestLongStandingEntityFailure(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		failedFor time.Duration
+		wantDelay time.Duration
+	}{
+		{name: "failing for 35 hours", failedFor: 35 * time.Hour, wantDelay: 15 * time.Minute},
+		{name: "failing for 37 hours", failedFor: 37 * time.Hour, wantDelay: time.Hour},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			helper := newFullSyncHelper(t)
+			defer helper.Close()
+
+			helper.wrapperClientMock.monitorsErr = errMonitorsUnavailable
+
+			// Enough failures in a row to reach the longest delay.
+			helper.s.l.Lock()
+			helper.s.entityFailures[types.EntityMonitor] = 50
+			helper.s.entityFirstFailureAt[types.EntityMonitor] = helper.Now().Add(-tt.failedFor)
+			helper.s.l.Unlock()
+
+			if result := helper.runOnceWithResult(t); result.err == nil {
+				t.Fatal("runOnce succeeded, want the monitors' error")
+			}
+
+			checkRetryDelay(t, helper, tt.wantDelay)
+
+			helper.wrapperClientMock.monitorsErr = nil
+
+			helper.AddTime(tt.wantDelay * 2)
+
+			if result := helper.runOnceWithResult(t); result.err != nil {
+				t.Fatal(result.err)
+			}
+
+			if firstFailureAt, ok := helper.s.entityFirstFailureAt[types.EntityMonitor]; ok {
+				t.Errorf("monitors first failure at %s kept after their success", firstFailureAt)
 			}
 		})
 	}
