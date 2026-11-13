@@ -86,6 +86,18 @@ func TestFullSynchronizationPartialFailure(t *testing.T) {
 			t.Errorf("requested synchronizations mismatch (-want +got)\n%s", diff)
 		}
 
+		// The state keeps when the monitors started failing, for a restart.
+		var firstFailures map[types.EntityName]time.Time
+
+		if err := helper.state.Get(entityFirstFailureCacheKey, &firstFailures); err != nil {
+			t.Fatal(err)
+		}
+
+		wantFirstFailures := map[types.EntityName]time.Time{types.EntityMonitor: helper.Now()}
+		if diff := cmp.Diff(wantFirstFailures, firstFailures); diff != "" {
+			t.Errorf("first failures in the state mismatch (-want +got)\n%s", diff)
+		}
+
 		helper.wrapperClientMock.monitorsErr = nil
 
 		helper.AddTime(time.Minute)

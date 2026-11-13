@@ -67,7 +67,7 @@ var errSkippedExecution = errors.New("execution skipped to due maintenance mode 
 const (
 	// entityMaxRetryDelay is the longest a failed entity waits before its next attempt.
 	entityMaxRetryDelay = 15 * time.Minute
-	// longStandingFailure is how long an entity, or the whole agent, fails before it waits up to
+	// longStandingFailure is how long an entity fails before it waits up to
 	// longStandingMaxRetryDelay between attempts.
 	longStandingFailure       = 36 * time.Hour
 	longStandingMaxRetryDelay = time.Hour
@@ -635,14 +635,19 @@ func (e *Execution) recordResults() {
 	e.synchronizer.l.Lock()
 	defer e.synchronizer.l.Unlock()
 
+	firstFailuresChanged := false
+
 	for _, ee := range e.entities {
 		name := ee.entity.Name()
+		_, wasFailing := e.synchronizer.entityFirstFailureAt[name]
 
 		if ee.synced {
 			e.synchronizer.entityLastSync[name] = e.startedAt
 			delete(e.synchronizer.entityFailures, name)
 			delete(e.synchronizer.entityRetryAt, name)
 			delete(e.synchronizer.entityFirstFailureAt, name)
+
+			firstFailuresChanged = firstFailuresChanged || wasFailing
 
 			continue
 		}
@@ -655,11 +660,16 @@ func (e *Execution) recordResults() {
 
 		if !errors.Is(ee.err, errConnectorTemporaryDisabled) {
 			retryDelay = e.recordFailureLocked(name, ee.err)
+			firstFailuresChanged = firstFailuresChanged || !wasFailing
 		}
 
 		if ee.syncType == types.SyncTypeForceCacheRefresh {
 			e.synchronizer.requestLaterSynchronizationLocked(name, true, retryDelay)
 		}
+	}
+
+	if firstFailuresChanged {
+		e.synchronizer.saveEntityFirstFailuresLocked()
 	}
 }
 

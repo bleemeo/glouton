@@ -109,8 +109,8 @@ func checkRetryDelay(t *testing.T, helper *syncTestHelper, want time.Duration) t
 	return retryDelay
 }
 
-// TestHandleExecutionResult checks when the failed executions disable the whole connector and
-// mark the agent dysfunctional.
+// TestHandleExecutionResult checks only the authentication errors disable the whole connector:
+// for the other errors, each failed entity waits for its own retry delay.
 func TestHandleExecutionResult(t *testing.T) {
 	authErr := fmt.Errorf("metric: %w", &bleemeo.AuthError{APIError: &bleemeo.APIError{StatusCode: 401}})
 
@@ -122,7 +122,6 @@ func TestHandleExecutionResult(t *testing.T) {
 		// targets.
 		withoutAPI        bool
 		errSync           error
-		wantDysfunctional bool
 		wantDisableReason bleemeoTypes.DisableReason
 		// wantDisabledFor is the least the connector stays disabled after the last execution.
 		wantDisabledFor time.Duration
@@ -133,18 +132,8 @@ func TestHandleExecutionResult(t *testing.T) {
 			errSync:           errEntityFailed,
 		},
 		{
-			name:              "every entity failing",
-			errSync:           errEntityFailed,
-			wantDysfunctional: true,
-			wantDisableReason: bleemeoTypes.DisableLongStandingError,
-		},
-		{
-			name:              "every entity calling the API failing",
-			synchronizedEvery: time.Hour,
-			withoutAPI:        true,
-			errSync:           errEntityFailed,
-			wantDysfunctional: true,
-			wantDisableReason: bleemeoTypes.DisableLongStandingError,
+			name:    "every entity failing",
+			errSync: errEntityFailed,
 		},
 		{
 			// The entities with nothing to do succeed without calling the API: the delay keeps
@@ -153,7 +142,6 @@ func TestHandleExecutionResult(t *testing.T) {
 			synchronizedEvery: 15 * time.Minute,
 			withoutAPI:        true,
 			errSync:           authErr,
-			wantDysfunctional: true,
 			wantDisableReason: bleemeoTypes.DisableAuthenticationError,
 			wantDisabledFor:   24 * time.Hour,
 		},
@@ -193,10 +181,6 @@ func TestHandleExecutionResult(t *testing.T) {
 				helper.AddTime(15 * time.Minute)
 			}
 
-			if got := stateHasValue(agentDysfunctionalCacheKey, helper.state); got != tt.wantDysfunctional {
-				t.Errorf("agent dysfunctional = %v, want %v", got, tt.wantDysfunctional)
-			}
-
 			until, reason := helper.s.getDisabledUntil()
 			if reason != tt.wantDisableReason {
 				t.Errorf("connector disabled for %s, want %s", reason, tt.wantDisableReason)
@@ -210,27 +194,40 @@ func TestHandleExecutionResult(t *testing.T) {
 	}
 }
 
-// TestLongStandingEntityFailure checks an entity failing for more than 36 hours waits up to an
-// hour between its attempts, instead of 15 minutes, and that a success resets it.
+// TestLongStandingEntityFailure checks an entity failing for more than 36 hours, even before a
+// restart, waits up to an hour between its attempts, instead of 15 minutes, and that a success
+// resets it.
 func TestLongStandingEntityFailure(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
 		failedFor time.Duration
+		restarted bool
 		wantDelay time.Duration
 	}{
 		{name: "failing for 35 hours", failedFor: 35 * time.Hour, wantDelay: 15 * time.Minute},
 		{name: "failing for 37 hours", failedFor: 37 * time.Hour, wantDelay: time.Hour},
+		{name: "failing for 37 hours before a restart", failedFor: 37 * time.Hour, restarted: true, wantDelay: time.Hour},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			helper := newFullSyncHelper(t)
 			defer helper.Close()
 
 			helper.wrapperClientMock.monitorsErr = errMonitorsUnavailable
+			firstFailureAt := helper.Now().Add(-tt.failedFor)
 
-			// Enough failures in a row to reach the longest delay.
+			if tt.restarted {
+				_ = helper.state.Set(entityFirstFailureCacheKey, map[types.EntityName]time.Time{types.EntityMonitor: firstFailureAt})
+
+				helper.initSynchronizer(t)
+			}
+
 			helper.s.l.Lock()
+			// Enough failures in a row to reach the longest delay.
 			helper.s.entityFailures[types.EntityMonitor] = 50
-			helper.s.entityFirstFailureAt[types.EntityMonitor] = helper.Now().Add(-tt.failedFor)
+
+			if !tt.restarted {
+				helper.s.entityFirstFailureAt[types.EntityMonitor] = firstFailureAt
+			}
 			helper.s.l.Unlock()
 
 			if result := helper.runOnceWithResult(t); result.err == nil {
@@ -249,6 +246,10 @@ func TestLongStandingEntityFailure(t *testing.T) {
 
 			if firstFailureAt, ok := helper.s.entityFirstFailureAt[types.EntityMonitor]; ok {
 				t.Errorf("monitors first failure at %s kept after their success", firstFailureAt)
+			}
+
+			if stateHasValue(entityFirstFailureCacheKey, helper.state) {
+				t.Error("first failures kept in the state after the monitors' success")
 			}
 		})
 	}

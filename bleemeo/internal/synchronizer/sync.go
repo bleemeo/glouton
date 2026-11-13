@@ -66,8 +66,13 @@ import (
 )
 
 const (
-	agentAuthBrokenCacheKey    = "AgentAuthBroken"
+	agentAuthBrokenCacheKey = "AgentAuthBroken"
+	// agentDysfunctionalCacheKey is the flag older versions set on an agent failing for 36 hours,
+	// to disable its connector up to an hour. Each entity now waits for its own retry delay, see
+	// Execution.recordFailureLocked: Run deletes the flag.
 	agentDysfunctionalCacheKey = "AgentDysfunctional"
+	// entityFirstFailureCacheKey keeps entityFirstFailureAt across restarts.
+	entityFirstFailureCacheKey = "EntityFirstFailure"
 	refreshTokenCacheKey       = "RefreshToken"
 
 	// duplicateCheckInterval is the delay between two duplicated agent checks, jittered.
@@ -127,7 +132,6 @@ type Synchronizer struct {
 	lastSuccessfulSync        time.Time
 	lastSync                  time.Time
 	successiveErrors          int
-	firstErrorAt              time.Time
 	// successiveAuthErrors and firstAuthErrorAt are only used by the synchronization loop.
 	successiveAuthErrors int
 	firstAuthErrorAt     time.Time
@@ -149,7 +153,8 @@ type Synchronizer struct {
 	entityLastSync map[types.EntityName]time.Time
 	entityFailures map[types.EntityName]int
 	// entityRetryAt is, per failed entity, when it can be synchronized again, and
-	// entityFirstFailureAt when the failures in a row started: see Execution.recordResults.
+	// entityFirstFailureAt when the failures in a row started, kept in the state: see
+	// Execution.recordResults.
 	entityRetryAt        map[types.EntityName]time.Time
 	entityFirstFailureAt map[types.EntityName]time.Time
 }
@@ -192,6 +197,8 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 
 		entityFirstFailureAt: make(map[types.EntityName]time.Time),
 	}
+
+	s.loadEntityFirstFailures()
 
 	s.info = syncinfo.New(&s.requestCounter, s.now)
 	s.diagnostics = syncdiagnostics.New(option.State, option.Config.Agent.StateDirectory, s.now)
@@ -283,7 +290,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		EntityRetryAt             map[types.EntityName]time.Time
 		EntityFirstFailureAt      map[types.EntityName]time.Time
 		AuthenticatedSuccesses    uint32
-		FirstErrorAt              time.Time
 		MaintenanceMode           bool
 		AgentID                   string
 		DisabledUntil             time.Time
@@ -294,7 +300,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		DelayedContainer          map[string]time.Time
 		APIFeatures               map[string]bool
 		StateMarkerAuthBroken     time.Time
-		StateMarkerDysfunctional  time.Time
 	}{
 		NextFullSync:              s.nextFullSync,
 		HeartBeat:                 s.syncHeartbeat,
@@ -309,7 +314,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		EntityRetryAt:             maps.Clone(s.entityRetryAt),
 		EntityFirstFailureAt:      maps.Clone(s.entityFirstFailureAt),
 		AuthenticatedSuccesses:    s.authenticatedSuccessCounter.Load(),
-		FirstErrorAt:              s.firstErrorAt,
 		MaintenanceMode:           s.maintenanceMode,
 		AgentID:                   s.agentID,
 		DisabledUntil:             s.disabledUntil,
@@ -320,7 +324,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		DelayedContainer:          delayedContainer,
 		APIFeatures:               make(map[string]bool, len(s.hasFeature)),
 		StateMarkerAuthBroken:     stateGetTime(agentAuthBrokenCacheKey, s.option.State),
-		StateMarkerDysfunctional:  stateGetTime(agentDysfunctionalCacheKey, s.option.State),
 	}
 
 	for k, v := range s.hasFeature {
@@ -364,13 +367,17 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err)
 	}
 
+	err = s.option.State.Delete(agentDysfunctionalCacheKey)
+	if err != nil {
+		logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
+	}
+
 	s.syncInfoBeforeFirstExecution(ctx)
 
 	s.option.SetInitialized()
 
 	s.l.Lock()
 	s.successiveErrors = 0
-	s.firstErrorAt = time.Time{}
 	s.l.Unlock()
 
 	s.successiveAuthErrors = 0
@@ -421,30 +428,12 @@ func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error
 	if execution != nil && execution.calledAPISuccessfully() {
 		s.l.Lock()
 		s.successiveErrors = 0
-		s.firstErrorAt = time.Time{}
 		s.l.Unlock()
-
-		err := s.option.State.Delete(agentDysfunctionalCacheKey)
-		if err != nil {
-			logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
-		}
 	}
 
 	if errSync != nil {
 		s.l.Lock()
 		s.successiveErrors++
-
-		if s.firstErrorAt.IsZero() {
-			s.firstErrorAt = s.now()
-		} else if s.now().Sub(s.firstErrorAt) > longStandingFailure {
-			if !stateHasValue(agentDysfunctionalCacheKey, s.option.State) {
-				err := s.option.State.Set(agentDysfunctionalCacheKey, s.firstErrorAt.Format(time.RFC3339))
-				if err != nil {
-					logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
-				}
-			}
-		}
-
 		s.l.Unlock()
 
 		if IsAuthenticationError(errSync) {
@@ -484,9 +473,6 @@ func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error
 				// Ask MQTT to disconnect, but don't block reconnection.
 				// They will be blocked anyway because it's a auth error (so we don't have oauth token required to connect to MQTT)
 				s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
-			case stateHasValue(agentDysfunctionalCacheKey, s.option.State):
-				disableDelay := delay.Exponential(1*time.Minute, 1.55, successiveErrors, time.Hour)
-				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableLongStandingError)
 			case IsAuthenticationError(errSync):
 				// Other errors don't disable the whole connector: each failed entity waits
 				// for its own retry delay, see Execution.recordResults.
@@ -1492,6 +1478,46 @@ func (s *Synchronizer) requestLaterSynchronizationLocked(entityName types.Entity
 	}
 
 	s.forceSync[entityName] = request
+}
+
+// loadEntityFirstFailures reads from the state when the failing entities started failing, so
+// that an entity failing for longStandingFailure before a restart still waits up to
+// longStandingMaxRetryDelay.
+func (s *Synchronizer) loadEntityFirstFailures() {
+	if s.option.State == nil {
+		return
+	}
+
+	var firstFailures map[types.EntityName]time.Time
+
+	err := s.option.State.Get(entityFirstFailureCacheKey, &firstFailures)
+	if err != nil {
+		logger.V(1).Printf("Failed to read the entities' first failures from state cache: %v", err)
+
+		return
+	}
+
+	maps.Copy(s.entityFirstFailureAt, firstFailures)
+}
+
+// saveEntityFirstFailuresLocked writes entityFirstFailureAt to the state, see loadEntityFirstFailures.
+// Caller must hold the lock s.l.
+func (s *Synchronizer) saveEntityFirstFailuresLocked() {
+	if s.option.State == nil {
+		return
+	}
+
+	var err error
+
+	if len(s.entityFirstFailureAt) == 0 {
+		err = s.option.State.Delete(entityFirstFailureCacheKey)
+	} else {
+		err = s.option.State.Set(entityFirstFailureCacheKey, maps.Clone(s.entityFirstFailureAt))
+	}
+
+	if err != nil {
+		logger.V(1).Printf("Failed to write the entities' first failures to state cache: %v", err)
+	}
 }
 
 // stateHasValue returns whether the given state has a value for the given key.
