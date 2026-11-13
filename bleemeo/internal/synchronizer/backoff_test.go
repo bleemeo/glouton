@@ -194,6 +194,85 @@ func TestHandleExecutionResult(t *testing.T) {
 	}
 }
 
+// TestAuthBrokenFlag checks only an authenticated request the API answered resets the
+// authentication errors and clears the flag of broken credentials: an execution that doesn't
+// call the API, like one with nothing to synchronize, doesn't.
+func TestAuthBrokenFlag(t *testing.T) {
+	authErr := fmt.Errorf("metric: %w", &bleemeo.AuthError{APIError: &bleemeo.APIError{StatusCode: 401}})
+
+	newExecution := func(helper *syncTestHelper, err error, calledAPI bool) *Execution {
+		execution := &Execution{
+			synchronizer:                     helper.s,
+			initialAuthenticatedSuccessCount: helper.s.authenticatedSuccessCounter.Load(),
+		}
+
+		if err != nil {
+			execution.entities = []EntityExecution{{syncType: types.SyncTypeNormal, err: err}}
+		}
+
+		if calledAPI {
+			helper.s.authenticatedSuccessCounter.Add(1)
+		}
+
+		return execution
+	}
+
+	t.Run("authentication errors between executions without API call", func(t *testing.T) {
+		helper := newHelper(t)
+		defer helper.Close()
+
+		helper.preregisterAgent(t)
+		helper.initSynchronizer(t)
+
+		start := helper.Now()
+
+		for helper.Now().Sub(start) < 3*time.Hour {
+			helper.s.handleExecutionResult(newExecution(helper, authErr, false), authErr)
+			helper.AddTime(time.Minute)
+			helper.s.handleExecutionResult(newExecution(helper, nil, false), nil)
+			helper.AddTime(14 * time.Minute)
+		}
+
+		if !stateHasValue(agentAuthBrokenCacheKey, helper.state) {
+			t.Error("credentials not marked broken after 3 hours of authentication errors")
+		}
+
+		if _, reason := helper.s.getDisabledUntil(); reason != bleemeoTypes.DisableAuthenticationError {
+			t.Errorf("connector disabled for %s, want %s", reason, bleemeoTypes.DisableAuthenticationError)
+		}
+	})
+
+	for _, tt := range []struct {
+		name      string
+		calledAPI bool
+		wantFlag  bool
+	}{
+		{name: "flag cleared by an authenticated success", calledAPI: true, wantFlag: false},
+		{name: "flag kept by an execution without API call", calledAPI: false, wantFlag: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			helper := newHelper(t)
+			defer helper.Close()
+
+			helper.preregisterAgent(t)
+			helper.initSynchronizer(t)
+
+			_ = helper.state.Set(agentAuthBrokenCacheKey, helper.Now().Add(-3*time.Hour).Format(time.RFC3339))
+
+			helper.s.handleExecutionResult(newExecution(helper, authErr, false), authErr)
+			helper.s.handleExecutionResult(newExecution(helper, nil, tt.calledAPI), nil)
+
+			if got := stateHasValue(agentAuthBrokenCacheKey, helper.state); got != tt.wantFlag {
+				t.Errorf("credentials marked broken = %v, want %v", got, tt.wantFlag)
+			}
+
+			if wantErrors := map[bool]int{true: 0, false: 1}[tt.calledAPI]; helper.s.successiveAuthErrors != wantErrors {
+				t.Errorf("successive authentication errors = %d, want %d", helper.s.successiveAuthErrors, wantErrors)
+			}
+		})
+	}
+}
+
 // TestLongStandingEntityFailure checks an entity failing for more than 36 hours, even before a
 // restart, waits up to an hour between its attempts, instead of 15 minutes, and that a success
 // resets it.

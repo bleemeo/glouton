@@ -422,13 +422,22 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 // handleExecutionResult tracks the errors of the synchronization loop's executions, and disables
 // the connector for the errors that concern the whole agent.
 func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error) {
-	// An authenticated request the API answered shows the agent works with it: the failing
-	// entities only wait for their own retry delay, see Execution.recordResults. An entity that
-	// succeeds without calling the API, like SNMP without targets, shows nothing.
+	// An authenticated request the API answered shows the agent works with it, and its
+	// credentials too: the failing entities only wait for their own retry delay, see
+	// Execution.recordResults. An execution that doesn't call the API, like SNMP without targets
+	// or nothing to synchronize, shows nothing.
 	if execution != nil && execution.calledAPISuccessfully() {
 		s.l.Lock()
 		s.successiveErrors = 0
 		s.l.Unlock()
+
+		s.successiveAuthErrors = 0
+		s.firstAuthErrorAt = time.Time{}
+
+		err := s.option.State.Delete(agentAuthBrokenCacheKey)
+		if err != nil {
+			logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
+		}
 	}
 
 	if errSync != nil {
@@ -524,9 +533,6 @@ func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error
 				logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", errSync)
 			}
 		}
-	} else {
-		s.successiveAuthErrors = 0
-		s.firstAuthErrorAt = time.Time{}
 	}
 }
 
