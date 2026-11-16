@@ -17,12 +17,16 @@
 package synchronizer
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 )
+
+// errWrongRegistrationKey is the error RegisterSelf returns when the API rejects the registration key.
+var errWrongRegistrationKey = fmt.Errorf("%w: response code 401: Invalid username/password", errRegistrationFailed)
 
 // TestRegistrationFailureBackoff checks that an agent failing to register waits longer and
 // longer between its attempts: the registration happens before any entity, so no entity's
@@ -36,6 +40,12 @@ func TestRegistrationFailureBackoff(t *testing.T) {
 			name: "API error",
 			setup: func(helper *syncTestHelper) {
 				helper.wrapperClientMock.registerErr = &bleemeo.APIError{StatusCode: 500}
+			},
+		},
+		{
+			name: "wrong registration key",
+			setup: func(helper *syncTestHelper) {
+				helper.wrapperClientMock.registerErr = errWrongRegistrationKey
 			},
 		},
 		{
@@ -85,6 +95,39 @@ func TestRegistrationFailureBackoff(t *testing.T) {
 	}
 }
 
+// TestRegistrationFailureAfterRestart checks an agent failing to register for more than 36 hours
+// before a restart still waits up to an hour between its attempts.
+func TestRegistrationFailureAfterRestart(t *testing.T) {
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.wrapperClientMock.registerErr = errWrongRegistrationKey
+
+	helper.initSynchronizer(t)
+
+	firstFailureAt := helper.Now()
+
+	runRegistrationFailures(t, helper, 37*time.Hour)
+
+	if got := stateGetTime(registrationFirstFailureCacheKey, helper.state); !got.Equal(firstFailureAt) {
+		t.Errorf("first registration failure in the state = %s, want %s", got, firstFailureAt)
+	}
+
+	// Restart.
+	helper.initSynchronizer(t)
+
+	if !helper.s.firstRegistrationFailureAt.Equal(firstFailureAt) {
+		t.Errorf("first registration failure after a restart = %s, want %s", helper.s.firstRegistrationFailureAt, firstFailureAt)
+	}
+
+	// The delay starts again from 15 seconds, and grows up to an hour in about 3 hours.
+	runRegistrationFailures(t, helper, 3*time.Hour)
+
+	if attempts := runRegistrationFailures(t, helper, 10*time.Hour); attempts < 9 || attempts > 12 {
+		t.Errorf("%d registration attempts in 10 hours after a restart, want about 10", attempts)
+	}
+}
+
 // TestRegistrationFailureRecovery checks the agent registers once the API accepts it, and that
 // the start of the registration failures is then forgotten.
 func TestRegistrationFailureRecovery(t *testing.T) {
@@ -118,6 +161,10 @@ func TestRegistrationFailureRecovery(t *testing.T) {
 
 	if !helper.s.firstRegistrationFailureAt.IsZero() {
 		t.Errorf("first registration failure %s kept after the registration", helper.s.firstRegistrationFailureAt)
+	}
+
+	if stateHasValue(registrationFirstFailureCacheKey, helper.state) {
+		t.Error("first registration failure kept in the state after the registration")
 	}
 }
 

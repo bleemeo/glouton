@@ -73,7 +73,9 @@ const (
 	agentDysfunctionalCacheKey = "AgentDysfunctional"
 	// entityFirstFailureCacheKey keeps entityFirstFailureAt across restarts.
 	entityFirstFailureCacheKey = "EntityFirstFailure"
-	refreshTokenCacheKey       = "RefreshToken"
+	// registrationFirstFailureCacheKey keeps firstRegistrationFailureAt across restarts.
+	registrationFirstFailureCacheKey = "RegistrationFirstFailure"
+	refreshTokenCacheKey             = "RefreshToken"
 
 	// duplicateCheckInterval is the delay between two duplicated agent checks, jittered.
 	// The check lists the agent facts registered on the API, which used to happen on every
@@ -133,7 +135,7 @@ type Synchronizer struct {
 	lastSync                  time.Time
 	successiveErrors          int
 	// successiveAuthErrors, firstAuthErrorAt and firstRegistrationFailureAt are only used by the
-	// synchronization loop.
+	// synchronization loop. firstRegistrationFailureAt is kept in the state.
 	successiveAuthErrors       int
 	firstAuthErrorAt           time.Time
 	firstRegistrationFailureAt time.Time
@@ -201,6 +203,10 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 	}
 
 	s.loadEntityFirstFailures()
+
+	if option.State != nil {
+		s.firstRegistrationFailureAt = stateGetTime(registrationFirstFailureCacheKey, option.State)
+	}
 
 	s.info = syncinfo.New(&s.requestCounter, s.now)
 	s.diagnostics = syncdiagnostics.New(option.State, option.Config.Agent.StateDirectory, s.now)
@@ -302,6 +308,7 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		DelayedContainer          map[string]time.Time
 		APIFeatures               map[string]bool
 		StateMarkerAuthBroken     time.Time
+		RegistrationFirstFailure  time.Time
 	}{
 		NextFullSync:              s.nextFullSync,
 		HeartBeat:                 s.syncHeartbeat,
@@ -326,6 +333,7 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		DelayedContainer:          delayedContainer,
 		APIFeatures:               make(map[string]bool, len(s.hasFeature)),
 		StateMarkerAuthBroken:     stateGetTime(agentAuthBrokenCacheKey, s.option.State),
+		RegistrationFirstFailure:  stateGetTime(registrationFirstFailureCacheKey, s.option.State),
 	}
 
 	for k, v := range s.hasFeature {
@@ -384,7 +392,6 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 	s.successiveAuthErrors = 0
 	s.firstAuthErrorAt = time.Time{}
-	s.firstRegistrationFailureAt = time.Time{}
 
 	// We schedule a metric synchronization for in a few minutes to permit
 	// the deactivation of metrics whose item has disappeared between
@@ -446,11 +453,24 @@ func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error
 	// runOnce returns no execution only when the agent failed to register.
 	registrationFailed := execution == nil && errSync != nil
 
+	// The start of the registration failures is kept in the state, so that an agent failing to
+	// register for longStandingFailure before a restart still waits up to
+	// longStandingMaxRetryDelay.
 	switch {
-	case !registrationFailed:
+	case !registrationFailed && !s.firstRegistrationFailureAt.IsZero():
 		s.firstRegistrationFailureAt = time.Time{}
-	case s.firstRegistrationFailureAt.IsZero():
+
+		err := s.option.State.Delete(registrationFirstFailureCacheKey)
+		if err != nil {
+			logger.V(1).Printf("Failed to delete the registration's first failure from state cache: %v", err)
+		}
+	case registrationFailed && s.firstRegistrationFailureAt.IsZero():
 		s.firstRegistrationFailureAt = s.now()
+
+		err := s.option.State.Set(registrationFirstFailureCacheKey, s.firstRegistrationFailureAt)
+		if err != nil {
+			logger.V(1).Printf("Failed to write the registration's first failure to state cache: %v", err)
+		}
 	}
 
 	if errSync != nil {
