@@ -132,11 +132,13 @@ type Synchronizer struct {
 	lastSuccessfulSync        time.Time
 	lastSync                  time.Time
 	successiveErrors          int
-	// successiveAuthErrors and firstAuthErrorAt are only used by the synchronization loop.
-	successiveAuthErrors int
-	firstAuthErrorAt     time.Time
-	maintenanceMode      bool
-	suspendedMode        bool
+	// successiveAuthErrors, firstAuthErrorAt and firstRegistrationFailureAt are only used by the
+	// synchronization loop.
+	successiveAuthErrors       int
+	firstAuthErrorAt           time.Time
+	firstRegistrationFailureAt time.Time
+	maintenanceMode            bool
+	suspendedMode              bool
 	// See the comment on realClient about the locking of agentID.
 	agentID          string
 	delayedContainer map[string]time.Time
@@ -382,6 +384,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 	s.successiveAuthErrors = 0
 	s.firstAuthErrorAt = time.Time{}
+	s.firstRegistrationFailureAt = time.Time{}
 
 	// We schedule a metric synchronization for in a few minutes to permit
 	// the deactivation of metrics whose item has disappeared between
@@ -440,6 +443,16 @@ func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error
 		}
 	}
 
+	// runOnce returns no execution only when the agent failed to register.
+	registrationFailed := execution == nil && errSync != nil
+
+	switch {
+	case !registrationFailed:
+		s.firstRegistrationFailureAt = time.Time{}
+	case s.firstRegistrationFailureAt.IsZero():
+		s.firstRegistrationFailureAt = s.now()
+	}
+
 	if errSync != nil {
 		s.l.Lock()
 		s.successiveErrors++
@@ -475,6 +488,8 @@ func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error
 			successiveErrors := s.successiveErrors
 			s.l.Unlock()
 
+			// Other errors don't disable the whole connector: each failed entity waits for its
+			// own retry delay, see Execution.recordResults.
 			switch {
 			case stateHasValue(agentAuthBrokenCacheKey, s.option.State):
 				disableDelay := delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
@@ -483,12 +498,16 @@ func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error
 				// They will be blocked anyway because it's a auth error (so we don't have oauth token required to connect to MQTT)
 				s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
 			case IsAuthenticationError(errSync):
-				// Other errors don't disable the whole connector: each failed entity waits
-				// for its own retry delay, see Execution.recordResults.
 				disableDelay := delay.JitterDelay(
 					delay.Exponential(15*time.Second, 1.55, successiveErrors, 15*time.Minute),
 					0.1,
 				)
+
+				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
+			case registrationFailed:
+				// No entity ran, so none waits for its retry delay: the registration waits like
+				// a failed entity.
+				disableDelay := failureRetryDelay(successiveErrors, s.now().Sub(s.firstRegistrationFailureAt))
 
 				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
 			}
@@ -1152,6 +1171,8 @@ func (s *Synchronizer) throttleDeadline(execution *Execution) time.Time {
 	return s.getClient().ThrottleDeadline()
 }
 
+// runOnce registers the agent if needed and runs an execution. It returns no execution only when
+// the registration failed.
 func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execution, error) {
 	var wasCreation bool
 

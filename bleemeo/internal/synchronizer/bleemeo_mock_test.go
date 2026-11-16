@@ -48,6 +48,9 @@ type wrapperClientMock struct {
 	servicesErr error
 	// agentsErr is returned by ListAgents when set.
 	agentsErr error
+	// registerErr is returned by RegisterSelf when set, and registerCalls counts its calls.
+	registerErr   error
+	registerCalls int
 	// globalInfo is returned by GetGlobalInfo.
 	globalInfo bleemeoTypes.GlobalInfo
 
@@ -132,6 +135,12 @@ func (wcm *wrapperClientMock) GetGlobalInfo(context.Context) (bleemeoTypes.Globa
 }
 
 func (wcm *wrapperClientMock) RegisterSelf(_ context.Context, accountID, password, initialServerGroupName, name, fqdn, _ string) (id string, err error) {
+	wcm.registerCalls++
+
+	if wcm.registerErr != nil {
+		return "", wcm.registerErr
+	}
+
 	payload := bleemeoapi.AgentPayload{
 		AccountID:          accountID,
 		DisplayName:        name,

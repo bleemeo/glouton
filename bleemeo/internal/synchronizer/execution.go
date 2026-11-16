@@ -693,15 +693,22 @@ func (e *Execution) recordFailureLocked(name types.EntityName, err error) time.D
 		return 0
 	}
 
-	maxDelay := entityMaxRetryDelay
-	if s.now().Sub(firstFailureAt) > longStandingFailure {
-		maxDelay = longStandingMaxRetryDelay
-	}
-
-	retryDelay := delay.JitterDelay(delay.Exponential(15*time.Second, 1.55, s.entityFailures[name], maxDelay), 0.1)
+	retryDelay := failureRetryDelay(s.entityFailures[name], s.now().Sub(firstFailureAt))
 	s.entityRetryAt[name] = s.now().Add(retryDelay)
 
 	return retryDelay
+}
+
+// failureRetryDelay returns how long to wait before retrying after failures in a row, failing for
+// failingFor: it grows with the failures, up to entityMaxRetryDelay, or longStandingMaxRetryDelay
+// once failingFor exceeds longStandingFailure.
+func failureRetryDelay(failures int, failingFor time.Duration) time.Duration {
+	maxDelay := entityMaxRetryDelay
+	if failingFor > longStandingFailure {
+		maxDelay = longStandingMaxRetryDelay
+	}
+
+	return delay.JitterDelay(delay.Exponential(15*time.Second, 1.55, failures, maxDelay), 0.1)
 }
 
 // skipEntitiesInBackoff leaves out of this execution the entities that failed and whose retry
