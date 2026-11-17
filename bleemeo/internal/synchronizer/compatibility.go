@@ -30,31 +30,23 @@ type synchronizerState struct {
 	l sync.Mutex
 
 	lastFactUpdatedAt    string
-	lastSNMPcount        int
-	lastVSphereUpdate    time.Time
 	metricRetryAt        time.Time
 	lastMetricCount      int
 	lastMetricActivation time.Time
-
-	onDemandDiagnostic synchronizerOnDemandDiagnostic
 
 	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
 	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive
 	// notifications to tell us the backend is out of maintenance. So we resort to HTTP polling every 15
 	// minutes to check whether we are still in maintenance of not.
 	lastMaintenanceSync time.Time
-
-	// configSyncDone is true when the config items were successfully synced.
-	configSyncDone bool
 }
 
 type CompatibilityWrapper struct {
-	name                   types.EntityName
-	enabledInMaintenance   bool
-	enabledInSuspendedMode bool
-	skipOnlyEssential      bool
-	method                 func(context.Context, types.SyncType, types.SynchronizationExecution) (updateThresholds bool, err error)
-	state                  *synchronizerState
+	name                 types.EntityName
+	enabledInMaintenance bool
+	skipOnlyEssential    bool
+	method               func(context.Context, types.SyncType, types.SynchronizationExecution) (updateThresholds bool, err error)
+	state                *synchronizerState
 }
 
 type CompatibilityWrapperExecution struct {
@@ -72,7 +64,7 @@ func (cw *CompatibilityWrapper) EnabledInMaintenance() bool {
 }
 
 func (cw *CompatibilityWrapper) EnabledInSuspendedMode() bool {
-	return cw.enabledInSuspendedMode
+	return false
 }
 
 func (cw *CompatibilityWrapper) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
@@ -121,8 +113,6 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 
 	// Take values that will be used later before taking the lock. This reduce dead-lock risk
 	localFacts, _ := option.Facts.Facts(ctx, 24*time.Hour)
-	currentSNMPCount := option.SNMPOnlineTarget()
-	lastVSphereChange := option.LastVSphereChange(ctx)
 	_, lastDiscovery := option.Discovery.GetLatestDiscovery()
 	currentMetricCount := option.Store.MetricsCount()
 	mqttIsConnected := option.IsMqttConnected()
@@ -140,26 +130,6 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 
 	if state.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
 		execution.RequestSynchronization(types.EntityFact, false)
-	}
-
-	if state.lastSNMPcount != currentSNMPCount {
-		execution.RequestSynchronization(types.EntityFact, false)
-		execution.RequestSynchronization(types.EntitySNMP, false)
-		// TODO: this isn't idea. If the synchronization fail, it won't be retried.
-		// I think the ideal fix would be to always retry all syncMethods that was to synchronize but failed.
-		state.lastSNMPcount = currentSNMPCount
-	}
-
-	if lastVSphereChange.After(state.lastVSphereUpdate) {
-		execution.RequestSynchronization(types.EntityVSphere, false)
-
-		state.lastVSphereUpdate = lastVSphereChange
-	}
-
-	// After a reload, the config has been changed, so we want to do a fullsync
-	// without waiting the nextFullSync that is kept between reload.
-	if !state.configSyncDone {
-		execution.RequestSynchronization(types.EntityGloutonConfig, true)
 	}
 
 	_, minDelayed := execution.GlobalState().DelayedContainers()

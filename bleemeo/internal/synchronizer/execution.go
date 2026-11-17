@@ -348,24 +348,20 @@ func (e *Execution) run(ctx context.Context) error {
 		}
 	}
 
-	e.synchronizersCall(ctx, e.entities, func(ctx context.Context, ee EntityExecution) EntityExecution {
+	e.synchronizersCall(ctx, func(ctx context.Context, ee *EntityExecution) {
 		if ee.syncType == types.SyncTypeNone {
-			return ee
+			return
 		}
 
 		ee.err = ee.synchronizer.RefreshCache(ctx, ee.syncType)
-
-		return ee
 	})
 
-	e.synchronizersCall(ctx, e.entities, func(ctx context.Context, ee EntityExecution) EntityExecution {
+	e.synchronizersCall(ctx, func(ctx context.Context, ee *EntityExecution) {
 		if ee.syncType == types.SyncTypeNone {
-			return ee
+			return
 		}
 
 		ee.err = ee.synchronizer.SyncRemoteAndLocal(ctx, ee.syncType)
-
-		return ee
 	})
 
 	var errs []error
@@ -472,12 +468,12 @@ func (e *Execution) executePostRunCalls() {
 }
 
 func (e *Execution) applyNeedSynchronization(ctx context.Context) {
-	e.synchronizersCall(ctx, e.entities, func(ctx context.Context, ee EntityExecution) EntityExecution {
+	e.synchronizersCall(ctx, func(ctx context.Context, ee *EntityExecution) {
 		need, err := ee.synchronizer.NeedSynchronization(ctx)
 		if err != nil {
 			ee.err = err
 
-			return ee
+			return
 		}
 
 		if need {
@@ -485,8 +481,6 @@ func (e *Execution) applyNeedSynchronization(ctx context.Context) {
 				ee.syncType = types.SyncTypeNormal
 			}
 		}
-
-		return ee
 	})
 }
 
@@ -602,12 +596,12 @@ func (e *Execution) allForcedCacheRefresh() bool {
 	return true
 }
 
-func (e *Execution) synchronizersCall(ctx context.Context, synchronizersExecution []EntityExecution, f func(context.Context, EntityExecution) EntityExecution) {
-	for idx := range synchronizersExecution {
-		// Take a pointer so that errors set below are written back into the
-		// slice instead of a loop-local copy (the copy would only be persisted
-		// through the f() write-back, which is skipped on every continue path).
-		ee := &synchronizersExecution[idx]
+// synchronizersCall calls f on each entity which can run. f updates the entity's row in
+// e.entities in place: what the entity itself changes on its row during the call, like a
+// RequestSynchronization of itself, is kept.
+func (e *Execution) synchronizersCall(ctx context.Context, f func(context.Context, *EntityExecution)) {
+	for idx := range e.entities {
+		ee := &e.entities[idx]
 
 		if ctx.Err() != nil {
 			return
@@ -652,7 +646,7 @@ func (e *Execution) synchronizersCall(ctx context.Context, synchronizersExecutio
 		}
 
 		if ee.synchronizer != nil {
-			synchronizersExecution[idx] = f(ctx, *ee)
+			f(ctx, ee)
 		}
 	}
 }

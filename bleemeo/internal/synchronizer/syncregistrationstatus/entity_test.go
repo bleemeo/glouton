@@ -173,6 +173,7 @@ func newEntityTest(agentID string) *entityTest {
 	setAllowlist(test.execution.option.Cache, "mysql_queries,mysql_threads,postfix_queue_size,service_status")
 	setSendRegistrationStatus(test.execution.option.Cache, true)
 	test.entity = New(
+		test.execution.option,
 		func() ([]bleemeoTypes.MetricState, bool) { return test.metrics, !test.metricsUnpublished },
 		func() time.Time { return test.execution.now },
 	)
@@ -801,7 +802,7 @@ func (e *entityTest) archive(t *testing.T) archivedStatus {
 
 	archive := &fakeArchive{}
 
-	if err := e.entity.DiagnosticArchive(archive, e.execution.option); err != nil {
+	if err := e.entity.DiagnosticArchive(t.Context(), archive); err != nil {
 		t.Fatal(err)
 	}
 

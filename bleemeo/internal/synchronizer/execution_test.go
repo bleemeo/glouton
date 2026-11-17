@@ -481,6 +481,48 @@ func (e mockEntity) FinishExecution(ctx context.Context) {
 	_ = ctx
 }
 
+// selfRequestingEntity requests its own full synchronization from NeedSynchronization.
+type selfRequestingEntity struct {
+	mockEntity
+}
+
+func (e selfRequestingEntity) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
+	return selfRequestingExecution{mockEntity: e.mockEntity, execution: execution}, nil
+}
+
+type selfRequestingExecution struct {
+	mockEntity
+
+	execution types.SynchronizationExecution
+}
+
+func (e selfRequestingExecution) NeedSynchronization(context.Context) (bool, error) {
+	e.execution.RequestSynchronization(e.Name(), true)
+
+	return false, nil
+}
+
+// TestNeedSynchronizationRequestsItself checks an entity can request its own synchronization
+// from NeedSynchronization, as it can request the synchronization of another entity.
+func TestNeedSynchronizationRequestsItself(t *testing.T) {
+	t.Parallel()
+
+	e := newTestExecution(nil)
+
+	for idx, row := range e.entities {
+		if entity, ok := row.entity.(mockEntity); ok && entity.Name() == types.EntityGloutonConfig {
+			e.entities[idx].entity = selfRequestingEntity{mockEntity: entity}
+		}
+	}
+
+	e.applyNeedSynchronization(t.Context())
+
+	want := map[types.EntityName]types.SyncType{types.EntityGloutonConfig: types.SyncTypeForceCacheRefresh}
+	if diff := cmp.Diff(want, e.syncRequested()); diff != "" {
+		t.Errorf("syncRequested mismatch (-want +got)\n%s", diff)
+	}
+}
+
 func getMockEntityExecution(s *Synchronizer, entityReplyToNeedSynchronization map[types.EntityName]bool) []EntityExecution {
 	entities := make([]EntityExecution, 0, len(s.synchronizers))
 

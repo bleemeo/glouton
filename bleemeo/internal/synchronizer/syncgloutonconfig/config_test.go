@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package synchronizer
+package syncgloutonconfig
 
 import (
 	"net/url"
@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 
 	"github.com/google/go-cmp/cmp"
@@ -133,7 +133,7 @@ func TestTryImproveRegisterError(t *testing.T) {
 		},
 	}
 
-	configItems := []types.GloutonConfigItem{
+	configItems := []bleemeoTypes.GloutonConfigItem{
 		{Key: "a.b"},
 		{Key: "1.2.3"},
 	}

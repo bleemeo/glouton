@@ -14,7 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package synchronizer
+// Package syncgloutonconfig registers the Glouton configuration on Bleemeo, as config items.
+package syncgloutonconfig
 
 import (
 	"context"
@@ -52,6 +53,120 @@ type configItemValue struct {
 	Value any
 }
 
+// SyncGloutonConfig registers the config items of Glouton on Bleemeo.
+type SyncGloutonConfig struct {
+	items []config.Item
+	// syncDone is true once the config items were synchronized. A reload creates a new
+	// SyncGloutonConfig, so the config items, which may have changed, are synchronized
+	// without waiting for the next full synchronization.
+	syncDone bool
+}
+
+// New returns the entity, which registers items.
+func New(items []config.Item) *SyncGloutonConfig {
+	return &SyncGloutonConfig{items: items}
+}
+
+func (s *SyncGloutonConfig) Name() types.EntityName {
+	return types.EntityGloutonConfig
+}
+
+func (s *SyncGloutonConfig) EnabledInMaintenance() bool {
+	return false
+}
+
+func (s *SyncGloutonConfig) EnabledInSuspendedMode() bool {
+	return false
+}
+
+func (s *SyncGloutonConfig) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
+	return &syncGloutonConfigExecution{
+		parent:    s,
+		execution: execution,
+	}, nil
+}
+
+type syncGloutonConfigExecution struct {
+	parent    *SyncGloutonConfig
+	execution types.SynchronizationExecution
+
+	// agentID and remote are the agent and its config items registered on the API, as read by
+	// RefreshCache.
+	agentID string
+	remote  map[comparableConfigItem]configItemValue
+}
+
+// NeedSynchronization requests a full synchronization until the config items were synchronized
+// once. They are only synchronized on full synchronizations.
+func (e *syncGloutonConfigExecution) NeedSynchronization(_ context.Context) (bool, error) {
+	if !e.parent.syncDone {
+		e.execution.RequestSynchronization(types.EntityGloutonConfig, true)
+	}
+
+	return false, nil
+}
+
+func (e *syncGloutonConfigExecution) RefreshCache(ctx context.Context, syncType types.SyncType) error {
+	if e.skip(syncType) {
+		return nil
+	}
+
+	e.agentID, _ = e.execution.Option().State.BleemeoCredentials()
+
+	remote, err := e.execution.BleemeoAPIClient().ListGloutonConfigItems(ctx, e.agentID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch config items: %w", err)
+	}
+
+	e.remote = configItemsToMap(remote)
+
+	return nil
+}
+
+func (e *syncGloutonConfigExecution) SyncRemoteAndLocal(ctx context.Context, syncType types.SyncType) error {
+	if e.skip(syncType) {
+		return nil
+	}
+
+	err := syncRemoteAndLocal(ctx, e.execution.BleemeoAPIClient(), e.agentID, localConfigItems(e.parent.items), e.remote)
+	if err != nil {
+		return err
+	}
+
+	e.parent.syncDone = true
+
+	return nil
+}
+
+func (e *syncGloutonConfigExecution) FinishExecution(_ context.Context) {
+	e.execution = nil
+}
+
+// skip returns whether the config items are left alone for this execution: they are only
+// synchronized on full synchronizations, and they aren't essential.
+func (e *syncGloutonConfigExecution) skip(syncType types.SyncType) bool {
+	return e.execution.IsOnlyEssential() || syncType != types.SyncTypeForceCacheRefresh
+}
+
+// syncRemoteAndLocal registers the local config items missing on the API, and deletes the
+// registered ones which no longer exist locally.
+func syncRemoteAndLocal(
+	ctx context.Context,
+	apiClient types.GloutonConfigItemClient,
+	agentID string,
+	localConfigItems map[comparableConfigItem]any,
+	remoteConfigItems map[comparableConfigItem]configItemValue,
+) error {
+	// Registers local config items not present on the API.
+	err := registerLocalConfigItems(ctx, apiClient, agentID, localConfigItems, remoteConfigItems)
+	if err != nil {
+		return err
+	}
+
+	// Remove remote config items not present locally.
+	return removeRemoteConfigItems(ctx, apiClient, localConfigItems, remoteConfigItems)
+}
+
 func configItemsToMap(items []bleemeoTypes.GloutonConfigItem) map[comparableConfigItem]configItemValue {
 	itemsMap := make(map[comparableConfigItem]configItemValue, len(items))
 
@@ -73,50 +188,11 @@ func configItemsToMap(items []bleemeoTypes.GloutonConfigItem) map[comparableConf
 	return itemsMap
 }
 
-func (s *Synchronizer) syncGloutonConfig(
-	ctx context.Context,
-	syncType types.SyncType,
-	execution types.SynchronizationExecution,
-) (updateThresholds bool, err error) {
-	// The config is not essential and can be registered later.
-	if execution.IsOnlyEssential() || syncType != types.SyncTypeForceCacheRefresh {
-		return false, nil
-	}
-
-	apiClient := execution.BleemeoAPIClient()
-
-	remoteConfigItemsList, err := apiClient.ListGloutonConfigItems(ctx, s.agentID)
-	if err != nil {
-		return false, fmt.Errorf("failed to fetch config items: %w", err)
-	}
-
-	remoteConfigItems := configItemsToMap(remoteConfigItemsList)
-	localConfigItems := s.localConfigItems()
-
-	// Registers local config items not present on the API.
-	err = s.registerLocalConfigItems(ctx, apiClient, localConfigItems, remoteConfigItems)
-	if err != nil {
-		return false, err
-	}
-
-	// Remove remote config items not present locally.
-	err = s.removeRemoteConfigItems(ctx, apiClient, localConfigItems, remoteConfigItems)
-	if err != nil {
-		return false, err
-	}
-
-	s.state.l.Lock()
-	s.state.configSyncDone = true
-	s.state.l.Unlock()
-
-	return false, nil
-}
-
 // localConfigItems returns the local config items in a map of config value by comparableConfigItem.
-func (s *Synchronizer) localConfigItems() map[comparableConfigItem]any {
-	items := make(map[comparableConfigItem]any, len(s.option.ConfigItems))
+func localConfigItems(configItems []config.Item) map[comparableConfigItem]any {
+	items := make(map[comparableConfigItem]any, len(configItems))
 
-	for _, item := range s.option.ConfigItems {
+	for _, item := range configItems {
 		// Ignore items with key or path too long because we won't be able to register them.
 		if len(item.Key) > common.APIConfigItemKeyLength ||
 			len(item.Path) > common.APIConfigItemPathLength {
@@ -197,9 +273,10 @@ func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeo.ConfigItemTyp
 }
 
 // registerLocalConfigItems registers local config items not present on the API.
-func (s *Synchronizer) registerLocalConfigItems(
+func registerLocalConfigItems(
 	ctx context.Context,
 	apiClient types.GloutonConfigItemClient,
+	agentID string,
 	localConfigItems map[comparableConfigItem]any,
 	remoteConfigItems map[comparableConfigItem]configItemValue,
 ) error {
@@ -216,7 +293,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 
 		itemsToRegister = append(itemsToRegister,
 			bleemeoTypes.GloutonConfigItem{
-				Agent:    s.agentID,
+				Agent:    agentID,
 				Key:      localItem.Key,
 				Value:    localValue,
 				Priority: localItem.Priority,
@@ -242,7 +319,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 }
 
 // removeRemoteConfigItems removes remote config items not present locally.
-func (s *Synchronizer) removeRemoteConfigItems(
+func removeRemoteConfigItems(
 	ctx context.Context,
 	apiClient types.GloutonConfigItemClient,
 	localConfigItems map[comparableConfigItem]any,
@@ -265,7 +342,7 @@ func (s *Synchronizer) removeRemoteConfigItems(
 		err := apiClient.DeleteGloutonConfigItem(ctx, remoteItem.ID)
 		if err != nil {
 			// Ignore the error if the item has already been deleted.
-			if IsNotFound(err) {
+			if types.IsNotFound(err) {
 				continue
 			}
 

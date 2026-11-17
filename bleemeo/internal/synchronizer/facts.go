@@ -86,9 +86,9 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, e
 	allAgentFacts[s.agentID] = localFacts
 
 	if !execution.IsOnlyEssential() {
-		agentTypeID, found := s.getAgentType(bleemeo.AgentType_SNMP)
+		agentTypeID, found := s.option.Cache.AgentTypeID(bleemeo.AgentType_SNMP)
 		if !found {
-			return false, errRetryLater
+			return false, types.ErrRetryLater
 		}
 
 		remoteAgentList := s.option.Cache.AgentsByUUID()
@@ -266,7 +266,7 @@ func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.
 
 		err := apiClient.DeleteFact(ctx, v.ID)
 		// If the fact wasn't found, it has already been deleted.
-		if err != nil && !IsNotFound(err) {
+		if err != nil && !types.IsNotFound(err) {
 			return err
 		}
 

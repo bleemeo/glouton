@@ -71,7 +71,6 @@ const metricFields = "id,label,item,labels_text,unit,unit_text,service,container
 	"threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,agent"
 
 var (
-	errRetryLater     = errors.New("metric registration should be retried later")
 	errIgnore         = errors.New("metric registration fail but can be ignored (because it registration will be retried automatically)")
 	errAttemptToSpoof = errors.New("attempt to spoof another agent (or missing label)")
 	errNotImplemented = errors.New("not implemented")
@@ -801,7 +800,7 @@ func (s *Synchronizer) isOwnedMetric(metric bleemeoapi.MetricPayload) bool {
 	}
 
 	// Only monitors have metric that are owned by multiple agents
-	agentTypeID, found := s.getAgentType(bleemeo.AgentType_Monitor)
+	agentTypeID, found := s.option.Cache.AgentTypeID(bleemeo.AgentType_Monitor)
 	if found {
 		agents := s.option.Cache.AgentsByUUID()
 		if agentTypeID == agents[metric.AgentID].AgentType {
@@ -971,7 +970,7 @@ func (s *Synchronizer) metricUpdateListUUID(ctx context.Context, apiClient types
 
 	for _, key := range requests {
 		metric, err := apiClient.GetMetricByID(ctx, key)
-		if err != nil && IsNotFound(err) {
+		if err != nil && types.IsNotFound(err) {
 			delete(metricsByUUID, key)
 
 			continue
@@ -1225,7 +1224,7 @@ func (mr *metricRegisterer) doOnePass(ctx context.Context, currentList []glouton
 		}
 
 		err := mr.metricRegisterAndUpdateOne(ctx, metric)
-		if err != nil && errors.Is(err, errRetryLater) && state < metricPassRetry {
+		if err != nil && errors.Is(err, types.ErrRetryLater) && state < metricPassRetry {
 			mr.retryMetrics = append(mr.retryMetrics, metric)
 
 			continue
@@ -1386,7 +1385,7 @@ func (s *Synchronizer) prepareMetricPayload(
 		metricStatusOf, ok := registeredMetricsByKey[subKey]
 
 		if !ok {
-			return payload, errRetryLater
+			return payload, types.ErrRetryLater
 		}
 
 		payload.StatusOf = metricStatusOf.ID
@@ -1394,7 +1393,7 @@ func (s *Synchronizer) prepareMetricPayload(
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
 	if !ok {
-		return payload, errRetryLater
+		return payload, types.ErrRetryLater
 	}
 
 	if annotations.ContainerID != "" && !common.IgnoreContainer(cfg, metric.Labels()) {
@@ -1488,7 +1487,7 @@ func (s *Synchronizer) metricUpdateOne(ctx context.Context, apiClient types.Metr
 
 	if shouldMarkActive {
 		err := apiClient.SetMetricActive(ctx, remoteMetric.ID, true)
-		if err != nil && IsNotFound(err) {
+		if err != nil && types.IsNotFound(err) {
 			return remoteMetric, needRegisterError{remoteMetric: remoteMetric}
 		} else if err != nil {
 			return remoteMetric, err
@@ -1517,7 +1516,7 @@ func (s *Synchronizer) metricDeleteIgnoredServices(ctx context.Context, apiClien
 			err := apiClient.DeleteMetric(ctx, metric.ID)
 
 			// If the metric wasn't found, it has already been deleted.
-			if err != nil && !IsNotFound(err) {
+			if err != nil && !types.IsNotFound(err) {
 				return err
 			}
 
@@ -1547,7 +1546,7 @@ func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[str
 	agent := agents[v.AgentID]
 
 	if metricName == agentStatusName {
-		snmpTypeID, found := s.getAgentType(bleemeo.AgentType_SNMP)
+		snmpTypeID, found := s.option.Cache.AgentTypeID(bleemeo.AgentType_SNMP)
 
 		// We only skip deactivation of agent_status when it not an SNMP agent.
 		// On SNMP agent, "agent_status" isn't special.
@@ -1556,7 +1555,7 @@ func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[str
 		}
 	}
 
-	kubernetesTypeID, found := s.getAgentType(bleemeo.AgentType_K8s)
+	kubernetesTypeID, found := s.option.Cache.AgentTypeID(bleemeo.AgentType_K8s)
 	if found && agent.AgentType == kubernetesTypeID && !s.option.Cache.Agent().IsClusterLeader {
 		// Can't deactivate Kubernetes metrics if I'm not the leader.
 		return true
@@ -1643,7 +1642,7 @@ func (s *Synchronizer) metricDeactivate(ctx context.Context, apiClient types.Met
 		logger.V(2).Printf("Mark inactive the metric %v (uuid %s). Reason: %s", key, v.ID, deactivateReason)
 
 		err := apiClient.SetMetricActive(ctx, v.ID, false)
-		if err != nil && IsNotFound(err) {
+		if err != nil && types.IsNotFound(err) {
 			delete(registeredMetrics, k)
 
 			continue

@@ -27,7 +27,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -37,16 +36,23 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncagent"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncconfig"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncdiagnostics"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncgloutonconfig"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncregistrationstatus"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncsnmp"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncvsphere"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/inputs/vsphere"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	"github.com/bleemeo/glouton/threshold"
 	gloutonTypes "github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/version"
@@ -56,10 +62,9 @@ import (
 )
 
 const (
-	agentAuthBrokenCacheKey          = "AgentAuthBroken"
-	agentDysfunctionalCacheKey       = "AgentDysfunctional"
-	disableCrashReportUploadCacheKey = "DisableCrashReportUploadUntil"
-	refreshTokenCacheKey             = "RefreshToken"
+	agentAuthBrokenCacheKey    = "AgentAuthBroken"
+	agentDysfunctionalCacheKey = "AgentDysfunctional"
+	refreshTokenCacheKey       = "RefreshToken"
 
 	// duplicateCheckInterval is the delay between two duplicated agent checks, jittered.
 	// The check lists the agent facts registered on the API, which used to happen on every
@@ -76,7 +81,7 @@ var (
 	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://go.bleemeo.com/l/agent-configuration-bleemeo-account ")
 	errRegistrationFailed         = errors.New("registration failed")
 	errUninitialized              = errors.New("uninitialized")
-	errNotExist                   = errors.New("does not exist")
+	errUploadFailed               = errors.New("upload failed")
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -87,8 +92,11 @@ type Synchronizer struct {
 	synchronizers []types.EntitySynchronizer
 	state         *synchronizerState
 	hasFeature    map[types.APIFeature]bool
-	// registrationStatus is also in synchronizers, kept for the diagnostic archive.
-	registrationStatus *syncregistrationstatus.SyncRegistrationStatus
+	// diagnostics, snmp and vsphere are also in synchronizers, kept for the methods forwarded
+	// to them.
+	diagnostics *syncdiagnostics.SyncDiagnostics
+	snmp        *syncsnmp.SyncSNMP
+	vsphere     *syncvsphere.SyncVSphere
 
 	requestCounter atomic.Uint32
 	// realClient and agentID are only written by the synchronization loop
@@ -105,10 +113,8 @@ type Synchronizer struct {
 	heartbeatConsecutiveError int
 	lastSuccessfulSync        time.Time
 	lastSync                  time.Time
-	lastVSphereAgentsPurge    time.Time
 	successiveErrors          int
 	firstErrorAt              time.Time
-	warnAccountMismatchDone   bool
 	maintenanceMode           bool
 	suspendedMode             bool
 	// See the comment on realClient about the locking of agentID.
@@ -136,9 +142,8 @@ type Synchronizer struct {
 	// pending, or refused by the API.
 	registrationMetrics map[metricStateKey]int
 	// metricsStatePublished tells whether a synchronization published the metrics state yet.
-	metricsStatePublished         bool
-	disableCrashReportUploadUntil time.Time
-	lastInfo                      bleemeoTypes.GlobalInfo
+	metricsStatePublished bool
+	lastInfo              bleemeoTypes.GlobalInfo
 	// Whether the agent MQTT status should be synced. This is used to avoid syncing
 	// the MQTT status too soon before the agent has tried to connect to MQTT.
 	shouldUpdateMQTTStatus bool
@@ -191,33 +196,29 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		state:                  state,
 	}
 
-	s.registrationStatus = syncregistrationstatus.New(s.metricsState, s.now)
+	s.diagnostics = syncdiagnostics.New(option.State, option.Config.Agent.StateDirectory, s.now)
+	s.snmp = syncsnmp.New(option.State, option.SNMP)
+	s.vsphere = syncvsphere.New(option.State, option.VSphereDevices, s.now)
 
 	s.synchronizers = []types.EntitySynchronizer{
 		&CompatibilityWrapper{state: state, name: types.EntityInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
-		&CompatibilityWrapper{state: state, name: types.EntityAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
+		syncagent.New(),
 		syncconfig.New(option.Cache),
 		&CompatibilityWrapper{state: state, name: types.EntityFact, method: s.syncFacts},
 		&CompatibilityWrapper{state: state, name: types.EntityContainer, method: s.syncContainers},
-		&CompatibilityWrapper{state: state, name: types.EntitySNMP, method: s.syncSNMP},
-		&CompatibilityWrapper{state: state, name: types.EntityVSphere, method: s.syncVSphere},
+		s.snmp,
+		s.vsphere,
 		syncapplications.New(),
 		syncservices.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},
-		s.registrationStatus,
-		&CompatibilityWrapper{state: state, name: types.EntityGloutonConfig, method: s.syncGloutonConfig},
-		&CompatibilityWrapper{state: state, name: types.EntityDiagnostics, method: s.syncDiagnostics},
+		syncregistrationstatus.New(option, s.metricsState, s.now),
+		syncgloutonconfig.New(option.ConfigItems),
+		s.diagnostics,
 	}
 
 	if s.option.State != nil {
 		s.agentID, _ = s.option.State.BleemeoCredentials()
-
-		if err := s.option.State.Get(disableCrashReportUploadCacheKey, &s.disableCrashReportUploadUntil); err != nil {
-			logger.V(1).Printf("Failed to load crash report upload throttle info from cache: %v", err)
-		} else if s.disableCrashReportUploadUntil.Before(s.now()) {
-			s.disableCrashReportUploadUntil = time.Time{}
-		}
 	}
 
 	return s
@@ -236,13 +237,22 @@ func (s *Synchronizer) getClient() types.Client {
 	return &wrapperClient{client: s.realClient}
 }
 
-func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes.ArchiveWriter) error {
-	// The sync state first: the registration status must not keep it out of the archive.
+func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive gloutonTypes.ArchiveWriter) error {
+	// The sync state first: an entity must not keep it out of the archive.
 	if err := s.diagnosticSyncState(archive); err != nil {
 		return err
 	}
 
-	return s.registrationStatus.DiagnosticArchive(archive, s.option)
+	// All the entities, so that one failing does not keep the others out either.
+	var errs []error
+
+	for _, entity := range s.synchronizers {
+		if archiver, ok := entity.(types.DiagnosticArchiver); ok {
+			errs = append(errs, archiver.DiagnosticArchive(ctx, archive))
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) error {
@@ -260,71 +270,67 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 	defer s.state.l.Unlock()
 
 	obj := struct {
-		NextFullSync                  time.Time
-		HeartBeat                     time.Time
-		HeartbeatConsecutiveError     int
-		FullSyncCount                 int
-		StartedAt                     time.Time
-		LastSuccessfulSync            time.Time
-		LastSync                      time.Time
-		LastMetricActivation          time.Time
-		LastFactUpdatedAt             string
-		SuccessiveErrors              int
-		FirstErrorAt                  time.Time
-		WarnAccountMismatchDone       bool
-		MaintenanceMode               bool
-		LastMetricCount               int
-		AgentID                       string
-		LastMaintenanceSync           time.Time
-		DisabledUntil                 time.Time
-		DisableReason                 string
-		LastDuplicateCheck            time.Time
-		NextDuplicateCheck            time.Time
-		ForceSync                     map[types.EntityName]types.SyncRequest
-		PendingMetricsUpdateCount     int
-		PendingMonitorsUpdateCount    int
-		DelayedContainer              map[string]time.Time
-		RetryableMetricFailure        map[bleemeoTypes.FailureKind]bool
-		MetricRetryAt                 time.Time
-		DisableCrashReportUploadUntil time.Time
-		LastInfo                      bleemeoTypes.GlobalInfo
-		ThresholdOverrides            string
-		APIFeatures                   map[string]bool
-		StateMarkerAuthBroken         time.Time
-		StateMarkerDysfunctional      time.Time
+		NextFullSync               time.Time
+		HeartBeat                  time.Time
+		HeartbeatConsecutiveError  int
+		FullSyncCount              int
+		StartedAt                  time.Time
+		LastSuccessfulSync         time.Time
+		LastSync                   time.Time
+		LastMetricActivation       time.Time
+		LastFactUpdatedAt          string
+		SuccessiveErrors           int
+		FirstErrorAt               time.Time
+		MaintenanceMode            bool
+		LastMetricCount            int
+		AgentID                    string
+		LastMaintenanceSync        time.Time
+		DisabledUntil              time.Time
+		DisableReason              string
+		LastDuplicateCheck         time.Time
+		NextDuplicateCheck         time.Time
+		ForceSync                  map[types.EntityName]types.SyncRequest
+		PendingMetricsUpdateCount  int
+		PendingMonitorsUpdateCount int
+		DelayedContainer           map[string]time.Time
+		RetryableMetricFailure     map[bleemeoTypes.FailureKind]bool
+		MetricRetryAt              time.Time
+		LastInfo                   bleemeoTypes.GlobalInfo
+		ThresholdOverrides         string
+		APIFeatures                map[string]bool
+		StateMarkerAuthBroken      time.Time
+		StateMarkerDysfunctional   time.Time
 	}{
-		NextFullSync:                  s.nextFullSync,
-		HeartBeat:                     s.syncHeartbeat,
-		HeartbeatConsecutiveError:     s.heartbeatConsecutiveError,
-		FullSyncCount:                 s.fullSyncCount,
-		StartedAt:                     s.startedAt,
-		LastSuccessfulSync:            s.lastSuccessfulSync,
-		LastSync:                      s.lastSync,
-		LastFactUpdatedAt:             s.state.lastFactUpdatedAt,
-		LastMetricActivation:          s.state.lastMetricActivation,
-		SuccessiveErrors:              s.successiveErrors,
-		FirstErrorAt:                  s.firstErrorAt,
-		WarnAccountMismatchDone:       s.warnAccountMismatchDone,
-		MaintenanceMode:               s.maintenanceMode,
-		LastMetricCount:               s.state.lastMetricCount,
-		AgentID:                       s.agentID,
-		LastMaintenanceSync:           s.state.lastMaintenanceSync,
-		DisabledUntil:                 s.disabledUntil,
-		DisableReason:                 s.disableReason.String(),
-		LastDuplicateCheck:            s.lastDuplicateCheck,
-		NextDuplicateCheck:            s.nextDuplicateCheck,
-		ForceSync:                     s.forceSync,
-		PendingMetricsUpdateCount:     len(s.pendingMetricsUpdate),
-		PendingMonitorsUpdateCount:    len(s.pendingMonitorsUpdate),
-		DelayedContainer:              delayedContainer,
-		RetryableMetricFailure:        s.retryableMetricFailure,
-		MetricRetryAt:                 s.state.metricRetryAt,
-		DisableCrashReportUploadUntil: s.disableCrashReportUploadUntil,
-		LastInfo:                      s.lastInfo,
-		ThresholdOverrides:            fmt.Sprintf("%v", s.thresholdOverrides),
-		APIFeatures:                   make(map[string]bool, len(s.hasFeature)),
-		StateMarkerAuthBroken:         stateGetTime(agentAuthBrokenCacheKey, s.option.State),
-		StateMarkerDysfunctional:      stateGetTime(agentDysfunctionalCacheKey, s.option.State),
+		NextFullSync:               s.nextFullSync,
+		HeartBeat:                  s.syncHeartbeat,
+		HeartbeatConsecutiveError:  s.heartbeatConsecutiveError,
+		FullSyncCount:              s.fullSyncCount,
+		StartedAt:                  s.startedAt,
+		LastSuccessfulSync:         s.lastSuccessfulSync,
+		LastSync:                   s.lastSync,
+		LastFactUpdatedAt:          s.state.lastFactUpdatedAt,
+		LastMetricActivation:       s.state.lastMetricActivation,
+		SuccessiveErrors:           s.successiveErrors,
+		FirstErrorAt:               s.firstErrorAt,
+		MaintenanceMode:            s.maintenanceMode,
+		LastMetricCount:            s.state.lastMetricCount,
+		AgentID:                    s.agentID,
+		LastMaintenanceSync:        s.state.lastMaintenanceSync,
+		DisabledUntil:              s.disabledUntil,
+		DisableReason:              s.disableReason.String(),
+		LastDuplicateCheck:         s.lastDuplicateCheck,
+		NextDuplicateCheck:         s.nextDuplicateCheck,
+		ForceSync:                  s.forceSync,
+		PendingMetricsUpdateCount:  len(s.pendingMetricsUpdate),
+		PendingMonitorsUpdateCount: len(s.pendingMonitorsUpdate),
+		DelayedContainer:           delayedContainer,
+		RetryableMetricFailure:     s.retryableMetricFailure,
+		MetricRetryAt:              s.state.metricRetryAt,
+		LastInfo:                   s.lastInfo,
+		ThresholdOverrides:         fmt.Sprintf("%v", s.thresholdOverrides),
+		APIFeatures:                make(map[string]bool, len(s.hasFeature)),
+		StateMarkerAuthBroken:      stateGetTime(agentAuthBrokenCacheKey, s.option.State),
+		StateMarkerDysfunctional:   stateGetTime(agentDysfunctionalCacheKey, s.option.State),
 	}
 
 	for k, v := range s.hasFeature {
@@ -881,19 +887,12 @@ func (s *Synchronizer) SuccessiveErrors() int {
 // If another call to this method is made before the next synchronization,
 // only the latest diagnostic will be uploaded.
 func (s *Synchronizer) ScheduleDiagnosticUpload(filename, requestToken string, contents []byte) {
+	s.diagnostics.ScheduleOnDemand(filename, requestToken, contents)
+
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.state.l.Lock()
-	defer s.state.l.Unlock()
-
 	s.requestSynchronizationLocked(types.EntityDiagnostics, false)
-	s.state.onDemandDiagnostic = synchronizerOnDemandDiagnostic{
-		filename:     filepath.Base(filename),
-		archive:      contents,
-		s:            s,
-		requestToken: requestToken,
-	}
 }
 
 func (s *Synchronizer) popPendingMetricsUpdate() []string {
@@ -1554,25 +1553,6 @@ func (s *Synchronizer) requestLaterSynchronizationLocked(entityName types.Entity
 	s.forceSync[entityName] = request
 }
 
-func (s *Synchronizer) canUploadCrashReports() bool {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	return s.disableCrashReportUploadUntil.Before(s.now())
-}
-
-func (s *Synchronizer) disableCrashReportUpload(duration time.Duration) {
-	until := s.now().Add(duration)
-
-	s.l.Lock()
-	s.disableCrashReportUploadUntil = until
-	s.l.Unlock()
-
-	if err := s.option.State.Set(disableCrashReportUploadCacheKey, until); err != nil {
-		logger.V(1).Printf("Failed to save crash report upload throttle info to cache: %v", err)
-	}
-}
-
 // stateHasValue returns whether the given state has a value for the given key.
 // If an error occurs, it returns false.
 func stateHasValue(key string, state bleemeoTypes.State) bool {
@@ -1597,4 +1577,25 @@ func stateGetTime(key string, state bleemeoTypes.State) time.Time {
 	}
 
 	return value
+}
+
+// FindSNMPAgent returns the agent of the SNMP target, among agentsByID. snmpType is the ID of
+// the SNMP agent type.
+func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, snmpType string, agentsByID map[string]bleemeoTypes.Agent) (bleemeoTypes.Agent, error) {
+	return s.snmp.FindAgent(ctx, target, snmpType, agentsByID)
+}
+
+// FindVSphereAgent returns the agent of the vSphere device, among agentsByID. agentTypeID is the
+// ID of the agent type of the device.
+func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device bleemeoTypes.VSphereDevice, agentTypeID string, agentsByID map[string]bleemeoTypes.Agent) (bleemeoTypes.Agent, error) {
+	return s.vsphere.FindAgent(ctx, device, agentTypeID, agentsByID)
+}
+
+// GetVSphereAgentTypes returns a map[vSphereKind]=>AgentTypeID of all vSphere resource kinds.
+func (s *Synchronizer) GetVSphereAgentTypes() (map[vsphere.ResourceKind]string, bool) {
+	return syncvsphere.AgentTypes(s.option.Cache)
+}
+
+func (s *Synchronizer) GetVSphereAgentType(kind vsphere.ResourceKind) (agentTypeID string, found bool) {
+	return syncvsphere.AgentType(s.option.Cache, kind)
 }
