@@ -81,6 +81,13 @@ type syncTestHelper struct {
 	ConfigItems        []config.Item
 	// ReloadState is kept across initSynchronizer, as Glouton keeps it across reloads.
 	ReloadState bleemeoTypes.BleemeoReloadState
+	// IsMetricAllowed filters the metrics, when it isn't nil. It can change after initSynchronizer:
+	// the entities keep their own copy of the options, so the option calls it.
+	IsMetricAllowed func(labels map[string]string) bool
+}
+
+func (helper *syncTestHelper) isMetricAllowed(labels map[string]string) bool {
+	return helper.IsMetricAllowed == nil || helper.IsMetricAllowed(labels)
 }
 
 // newHelper create an helper with all permanent resource: API, cache, state.
@@ -192,7 +199,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 		LastVSphereChange:          func(context.Context) time.Time { return helper.LastVSphereChange },
 		VSphereEndpointsInError:    func() map[string]bool { return map[string]bool{} },
 		IsContainerEnabled:         facts.ContainerFilter{}.ContainerEnabled,
-		IsMetricAllowed:            func(_ map[string]string) bool { return true },
+		IsMetricAllowed:            helper.isMetricAllowed,
 		BlackboxScraperName:        helper.cfg.Blackbox.ScraperName,
 		LastMetricAnnotationChange: func() time.Time { return time.Time{} },
 		PushAppender:               model.NewBufferAppender(),
@@ -373,7 +380,7 @@ func (helper *syncTestHelper) SetCacheMetrics(metrics ...bleemeoapi.MetricPayloa
 	tmp := make([]bleemeoTypes.Metric, 0, len(metrics))
 
 	for _, m := range metrics {
-		tmp = append(tmp, metricFromAPI(m, helper.Now()))
+		tmp = append(tmp, bleemeoapi.MetricFromAPI(m, helper.Now()))
 	}
 
 	helper.s.option.Cache.SetMetrics(tmp)

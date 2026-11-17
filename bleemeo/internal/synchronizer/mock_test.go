@@ -50,11 +50,6 @@ const (
 	mockAPIGloutonDiagnostic   = "gloutondiagnostic"
 )
 
-type mockMetric struct {
-	Name   string
-	labels map[string]string
-}
-
 type mockTime struct {
 	now time.Time
 }
@@ -97,29 +92,6 @@ func wrapIfClientError(err error) error {
 	}
 
 	return err
-}
-
-func (m mockMetric) Labels() map[string]string {
-	if m.labels != nil {
-		return m.labels
-	}
-
-	return map[string]string{gloutonTypes.LabelName: m.Name}
-}
-
-func (m mockMetric) Annotations() gloutonTypes.MetricAnnotations {
-	return gloutonTypes.MetricAnnotations{}
-}
-
-func (m mockMetric) Points(start, end time.Time) ([]gloutonTypes.Point, error) {
-	_ = start
-	_ = end
-
-	return nil, errNotImplemented
-}
-
-func (m mockMetric) LastPointReceivedAt() time.Time {
-	return time.Now()
 }
 
 func (mt *mockTime) Now() time.Time {

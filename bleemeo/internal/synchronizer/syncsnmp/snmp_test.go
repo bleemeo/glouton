@@ -58,15 +58,14 @@ func (c *fakeClient) RegisterSNMPAgent(_ context.Context, payload bleemeoapi.Age
 	return payload.Agent, nil
 }
 
-// fakeExecution gives the number of SNMP targets online, the client and the cache to the entity, and
-// records the linked synchronizations it requests. Any other call panics.
+// fakeExecution gives the number of SNMP targets online, the client and the cache to the entity.
+// Any other call panics.
 type fakeExecution struct {
 	types.SynchronizationExecution
 
 	online int
 	client *fakeClient
 	cache  *cache.Cache
-	linked [][2]types.EntityName
 }
 
 func (e *fakeExecution) BleemeoAPIClient() types.Client { return e.client }
@@ -77,12 +76,6 @@ func (e *fakeExecution) Option() types.Option {
 		SNMPOnlineTarget: func() int { return e.online },
 		Cache:            e.cache,
 	}
-}
-
-func (e *fakeExecution) RequestLinkedSynchronization(target types.EntityName, trigger types.EntityName) error {
-	e.linked = append(e.linked, [2]types.EntityName{target, trigger})
-
-	return nil
 }
 
 func newTarget(name, address, fqdn string) *snmp.Target {
@@ -236,7 +229,7 @@ func TestRegisterAndUpdate(t *testing.T) {
 }
 
 // TestNeedSynchronization checks the SNMP agents are synchronized when the number of targets
-// online changes, and the facts with them. A failed synchronization is retried.
+// online changes. A failed synchronization is retried.
 func TestNeedSynchronization(t *testing.T) {
 	t.Parallel()
 
@@ -285,11 +278,6 @@ func TestNeedSynchronization(t *testing.T) {
 		need, err := e.NeedSynchronization(t.Context())
 		if err != nil || need != step.want {
 			t.Errorf("%s: NeedSynchronization() = %v, %v, want %v", step.name, need, err, step.want)
-		}
-
-		want := [][2]types.EntityName{{types.EntityFact, types.EntitySNMP}}
-		if diff := cmp.Diff(want, execution.linked); diff != "" {
-			t.Errorf("%s: linked synchronizations mismatch (-want +got)\n%s", step.name, diff)
 		}
 
 		if !need {

@@ -128,6 +128,25 @@ func IsNotFound(err error) bool {
 	return false
 }
 
+// IsServerError returns true if the error is an APIError due to 5xx.
+func IsServerError(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode >= 500
+	}
+
+	return false
+}
+
+// APIErrorContent returns the API error response, if the error is an APIError.
+// Return an empty string if the error isn't an APIError.
+func APIErrorContent(err error) string {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return string(apiError.Response)
+	}
+
+	return ""
+}
+
 // IsRefusedValue tells whether the API, or a proxy in front of it, refused the value sent itself:
 // invalid (400, 422) or too large (413). Other errors, such as an authentication error or
 // throttling, are the synchronizer's to handle.
@@ -150,6 +169,13 @@ type EntitySynchronizer interface {
 	EnabledInSuspendedMode() bool
 
 	PrepareExecution(ctx context.Context, execution SynchronizationExecution) (EntitySynchronizerExecution, error)
+}
+
+// NeedSynchronizationWhileSkipped is implemented by the entity synchronizers that may need a
+// synchronization while they are skipped, in maintenance or suspended mode. The entity stays
+// skipped: the synchronization is requested again until an execution where it can run.
+type NeedSynchronizationWhileSkipped interface {
+	NeedSynchronizationWhileSkipped(ctx context.Context, execution SynchronizationExecution) bool
 }
 
 // DiagnosticArchiver is implemented by the entity synchronizers that add their state to the
@@ -193,24 +219,26 @@ type SynchronizationExecution interface {
 	// If called later, once SyncRemote starts being called, it will be run during *next* execution.
 	RequestSynchronization(entityName EntityName, requestFull bool)
 	// RequestLinkedSynchronization ask for an execution of synchronization of the specified entity,
-	// if another entity will be synchronized. This is better than using IsSynchronizationRequested,
-	// because if later something requests synchronization of the other entity, it will be updated.
-	// For example, RequestSynchronization(EntityApplication, EntityService) will
+	// if another entity will be synchronized. If later something requests synchronization of the
+	// other entity, the specified entity is requested too.
+	// For example, RequestLinkedSynchronization(EntityApplication, EntityService) will
 	// cause the synchronization of application if services are synchronized. This doesn't imply the other way.
 	// This function could only be called during NeedSynchronization.
 	RequestLinkedSynchronization(targetEntityName EntityName, triggerEntityName EntityName) error
 	// FailOtherEntity will cause execution of the synchronization of another entity to not
 	// be run in this execution and fail with provided error. This is useful if one entity
 	// must be created/updated before another entity synchronization runs.
-	FailOtherEntity(entityName EntityName, reason error)
+	// It does nothing if the other entity isn't scheduled in this execution. It could only be
+	// called during RefreshCache or SyncRemoteAndLocal: it returns an error otherwise.
+	FailOtherEntity(entityName EntityName, reason error) error
 	// RequestSynchronizationForAll calls RequestSynchronization for all known entities.
 	RequestSynchronizationForAll(requestFull bool)
+	// RequestLaterSynchronization asks for a synchronization of the specified entity to occur
+	// within delay, during a later execution. It might happen earlier.
+	RequestLaterSynchronization(entityName EntityName, requestFull bool, delay time.Duration)
 	// RequestLaterFullSynchronization ask for a full synchronization to occur within delay. It might happen earlier.
 	// Prefer RequestSynchronizationForAll if you need a very soon synchronization.
 	RequestLaterFullSynchronization(delay time.Duration)
-	// IsSynchronizationRequested return whether a synchronization was requested for the
-	// specific entity during the current execution.
-	IsSynchronizationRequested(entityName EntityName) bool
 	RequestUpdateThresholds()
 	RequestNotifyLabelsUpdate()
 	Option() Option

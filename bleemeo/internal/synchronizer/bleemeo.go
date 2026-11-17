@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncfacts"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -46,21 +48,32 @@ const (
 	monitorFields     = "id,account,agent,created_at,active,url,expected_content,expected_response_code,unexpected_content,ca_file,headers,head_request"
 	serviceFields     = "id,account_config,label,instance,listen_addresses,exe_path,tags,active,created_at"
 
+	// containerCacheFields are the container fields stored in local cache.
+	containerCacheFields = "id,name,container_id,container_inspect,container_status,container_created_at,container_runtime,deleted_at"
+	// containerRegisterFields are the fields used to register a container on the API.
+	containerRegisterFields = containerCacheFields + ",host,command,container_started_at,container_finished_at,container_image_id,container_image_name,docker_api_version"
+
 	// queryTrue is used as a URL query parameter value for boolean true.
 	queryTrue = "true"
+
+	// stringFalse and stringTrue are the values of the active parameter of the metrics.
+	stringFalse = "False"
+	stringTrue  = "True"
 
 	// resourceMonitor isn't yet defined by bleemeo-go.
 	resourceMonitor bleemeo.Resource = "v1/monitor/"
 
 	// paramFields is the URL query parameter name for specifying API response fields.
-	paramFields = "fields"
+	paramFields = bleemeoapi.ParamFields
 
 	// paramAgent is the URL query parameter name for filtering by agent.
-	paramAgent = "agent"
+	paramAgent = bleemeoapi.ParamAgent
 
 	// paramActive is the URL query parameter name for filtering by active status.
 	paramActive = "active"
 )
+
+var errCannotParse = errors.New("couldn't parse monitor")
 
 func (cl *wrapperClient) GetGlobalInfo(ctx context.Context) (bleemeoTypes.GlobalInfo, error) {
 	var globalInfo bleemeoTypes.GlobalInfo
@@ -83,7 +96,7 @@ func (cl *wrapperClient) RegisterSelf(ctx context.Context, accountID, password, 
 		"initial_password":          password,
 		"initial_server_group_name": initialServerGroupName,
 		"display_name":              name,
-		factFQDN:                    fqdn,
+		syncfacts.FactFQDN:          fqdn,
 	})
 	if err != nil {
 		return "", err
@@ -433,7 +446,7 @@ func (cl *wrapperClient) ListInactiveMetrics(ctx context.Context, stopSearchingP
 
 func (cl *wrapperClient) listMetrics(ctx context.Context, active bool, stopSearchingPredicate func(labelsText string) bool) ([]bleemeoapi.MetricPayload, error) {
 	params := url.Values{
-		paramFields: {metricFields},
+		paramFields: {bleemeoapi.MetricFields},
 	}
 
 	if active {
@@ -486,7 +499,7 @@ func (cl *wrapperClient) ListMetricsBy(ctx context.Context, params url.Values) (
 			continue
 		}
 
-		metricsByUUID[metric.ID] = metricFromAPI(metric, metricsByUUID[metric.ID].FirstSeenAt)
+		metricsByUUID[metric.ID] = bleemeoapi.MetricFromAPI(metric, metricsByUUID[metric.ID].FirstSeenAt)
 	}
 
 	return metricsByUUID, iter.Err()
@@ -495,7 +508,7 @@ func (cl *wrapperClient) ListMetricsBy(ctx context.Context, params url.Values) (
 func (cl *wrapperClient) GetMetricByID(ctx context.Context, id string) (bleemeoapi.MetricPayload, error) {
 	var metric bleemeoapi.MetricPayload
 
-	err := cl.Get(ctx, bleemeo.ResourceMetric, id, metricFields, &metric)
+	err := cl.Get(ctx, bleemeo.ResourceMetric, id, bleemeoapi.MetricFields, &metric)
 
 	return metric, err
 }
@@ -503,7 +516,7 @@ func (cl *wrapperClient) GetMetricByID(ctx context.Context, id string) (bleemeoa
 func (cl *wrapperClient) RegisterMetric(ctx context.Context, payload bleemeoapi.MetricPayload) (bleemeoapi.MetricPayload, error) {
 	var result bleemeoapi.MetricPayload
 
-	err := cl.Create(ctx, bleemeo.ResourceMetric, payload, metricFields, &result)
+	err := cl.Create(ctx, bleemeo.ResourceMetric, payload, bleemeoapi.MetricFields, &result)
 
 	return result, err
 }

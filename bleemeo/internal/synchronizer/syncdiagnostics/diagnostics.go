@@ -233,7 +233,6 @@ func (e *syncDiagnosticsExecution) SyncRemoteAndLocal(ctx context.Context, _ typ
 }
 
 func (e *syncDiagnosticsExecution) FinishExecution(_ context.Context) {
-	e.execution = nil
 }
 
 // selectDiagnostics returns the diagnostics to upload: the on-demand ones, then the crash

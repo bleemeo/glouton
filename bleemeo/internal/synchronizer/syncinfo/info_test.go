@@ -36,6 +36,7 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/executiontest"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
@@ -123,7 +124,7 @@ type disableCall struct {
 // fakeExecution gives the client, the cache and the options to the entity, and records what
 // it asks the synchronizer. Any other call panics.
 type fakeExecution struct {
-	types.SynchronizationExecution
+	executiontest.Recorder
 
 	client        *fakeClient
 	cache         *cache.Cache
@@ -140,7 +141,6 @@ type fakeExecution struct {
 	disabled []disableCall
 	// maintenanceSet is the maintenance mode set by the entity, nil when it didn't.
 	maintenanceSet *bool
-	requested      map[types.EntityName]bool
 }
 
 func newFakeExecution(globalInfo bleemeoTypes.GlobalInfo) *fakeExecution {
@@ -154,11 +154,10 @@ func newFakeExecution(globalInfo bleemeoTypes.GlobalInfo) *fakeExecution {
 	}})
 
 	return &fakeExecution{
-		client:    &fakeClient{globalInfo: globalInfo},
-		cache:     c,
-		appender:  model.NewBufferAppender(),
-		agentID:   testAgentID,
-		requested: make(map[types.EntityName]bool),
+		client:   &fakeClient{globalInfo: globalInfo},
+		cache:    c,
+		appender: model.NewBufferAppender(),
+		agentID:  testAgentID,
 	}
 }
 
@@ -166,10 +165,6 @@ func (e *fakeExecution) BleemeoAPIClient() types.Client { return e.client }
 func (e *fakeExecution) StartedAt() time.Time           { return e.startedAt }
 func (e *fakeExecution) GlobalState() types.SynchronizedGlobalState {
 	return fakeGlobalState{maintenance: e.maintenance}
-}
-
-func (e *fakeExecution) RequestSynchronization(entityName types.EntityName, forceCacheRefresh bool) {
-	e.requested[entityName] = forceCacheRefresh
 }
 
 func (e *fakeExecution) Option() types.Option {
@@ -415,7 +410,7 @@ func TestAgentTooOld(t *testing.T) {
 		t.Errorf("disabled for %v, want about a day", until)
 	}
 
-	if diff := cmp.Diff(map[types.EntityName]bool{types.EntityInfo: true}, execution.requested); diff != "" {
+	if diff := cmp.Diff(map[types.EntityName]bool{types.EntityInfo: true}, execution.Requested); diff != "" {
 		t.Errorf("requested synchronizations mismatch (-want +got)\n%s", diff)
 	}
 }
@@ -467,7 +462,7 @@ func TestTimeDrift(t *testing.T) {
 		t.Errorf("agent_status updated again: %v", execution.client.statusUpdates)
 	}
 
-	if diff := cmp.Diff(map[types.EntityName]bool{types.EntityInfo: true}, execution.requested); diff != "" {
+	if diff := cmp.Diff(map[types.EntityName]bool{types.EntityInfo: true}, execution.Requested); diff != "" {
 		t.Errorf("requested synchronizations mismatch (-want +got)\n%s", diff)
 	}
 }

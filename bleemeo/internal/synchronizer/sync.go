@@ -38,9 +38,13 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncagent"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncconfig"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/synccontainers"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncdiagnostics"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncfacts"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncgloutonconfig"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncinfo"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncmetrics"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncmonitors"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncregistrationstatus"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncsnmp"
@@ -53,7 +57,6 @@ import (
 	"github.com/bleemeo/glouton/inputs/vsphere"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
-	"github.com/bleemeo/glouton/threshold"
 	gloutonTypes "github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/version"
 
@@ -84,20 +87,25 @@ var (
 	errUploadFailed               = errors.New("upload failed")
 )
 
+// metricCPUUsed is the CPU metric, the first system metric the agent waits for after its
+// registration.
+const metricCPUUsed = syncmetrics.MetricCPUUsed
+
 // Synchronizer synchronize object with Bleemeo.
 type Synchronizer struct {
 	option        types.Option
 	now           func() time.Time
 	inTest        bool
 	synchronizers []types.EntitySynchronizer
-	state         *synchronizerState
 	hasFeature    map[types.APIFeature]bool
-	// info, diagnostics, snmp and vsphere are also in synchronizers, kept for the methods
-	// forwarded to them.
+	// info, diagnostics, snmp, vsphere, monitors and metrics are also in synchronizers, kept for
+	// the methods forwarded to them.
 	info        *syncinfo.SyncInfo
 	diagnostics *syncdiagnostics.SyncDiagnostics
 	snmp        *syncsnmp.SyncSNMP
 	vsphere     *syncvsphere.SyncVSphere
+	monitors    *syncmonitors.SyncMonitors
+	metrics     *syncmetrics.SyncMetrics
 
 	requestCounter atomic.Uint32
 	// realClient and agentID are only written by the synchronization loop
@@ -122,33 +130,12 @@ type Synchronizer struct {
 	agentID          string
 	delayedContainer map[string]time.Time
 
-	lastLogByKey map[string]time.Time
-
-	l                      sync.Mutex
-	disabledUntil          time.Time
-	disableReason          bleemeoTypes.DisableReason
-	lastDuplicateCheck     time.Time
-	nextDuplicateCheck     time.Time
-	forceSync              map[types.EntityName]types.SyncRequest
-	pendingMetricsUpdate   []string
-	pendingMonitorsUpdate  []MonitorUpdate
-	thresholdOverrides     map[thresholdOverrideKey]threshold.Threshold
-	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
-	// notRegisteredMetrics counts, by name and reason, the metrics the filter dropped.
-	notRegisteredMetrics map[metricStateKey]int
-	// stagedNotRegistered is filterMetrics' count for the run in progress, published by
-	// publishMetricsState.
-	stagedNotRegistered map[metricStateKey]int
-	// registrationMetrics counts the metrics that passed the filter but are not registered:
-	// pending, or refused by the API.
-	registrationMetrics map[metricStateKey]int
-	// metricsStatePublished tells whether a synchronization published the metrics state yet.
-	metricsStatePublished bool
-}
-
-type thresholdOverrideKey struct {
-	MetricName string
-	AgentID    string
+	l                  sync.Mutex
+	disabledUntil      time.Time
+	disableReason      bleemeoTypes.DisableReason
+	lastDuplicateCheck time.Time
+	nextDuplicateCheck time.Time
+	forceSync          map[types.EntityName]types.SyncRequest
 }
 
 // New return a new Synchronizer.
@@ -168,8 +155,6 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 	nextFullSync := now()
 	fullSyncCount := 0
 
-	state := &synchronizerState{}
-
 	if option.ReloadState != nil {
 		if option.ReloadState.NextFullSync().After(nextFullSync) {
 			nextFullSync = option.ReloadState.NextFullSync()
@@ -182,31 +167,34 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		option: option,
 		now:    now,
 
-		forceSync:              make(map[types.EntityName]types.SyncRequest),
-		nextFullSync:           nextFullSync,
-		fullSyncCount:          fullSyncCount,
-		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
-		state:                  state,
+		forceSync:     make(map[types.EntityName]types.SyncRequest),
+		nextFullSync:  nextFullSync,
+		fullSyncCount: fullSyncCount,
 	}
 
 	s.info = syncinfo.New(&s.requestCounter, s.now)
 	s.diagnostics = syncdiagnostics.New(option.State, option.Config.Agent.StateDirectory, s.now)
 	s.snmp = syncsnmp.New(option.State, option.SNMP)
 	s.vsphere = syncvsphere.New(option.State, option.VSphereDevices, s.now)
+	s.monitors = syncmonitors.New(option.Cache, option.State, option.MonitorManager)
+	// startedAt is set by Run, and read by the synchronization loop.
+	s.metrics = syncmetrics.New(option, s.now, func() time.Time { return s.startedAt })
 
 	s.synchronizers = []types.EntitySynchronizer{
 		s.info,
 		syncagent.New(),
 		syncconfig.New(option.Cache),
-		&CompatibilityWrapper{state: state, name: types.EntityFact, method: s.syncFacts},
-		&CompatibilityWrapper{state: state, name: types.EntityContainer, method: s.syncContainers},
+		syncfacts.New(s.snmp, s.vsphere, func(ctx context.Context, client types.Client, executionStartedAt time.Time) error {
+			return s.checkDuplicatedIfNeeded(ctx, client, executionStartedAt, true)
+		}),
+		synccontainers.New(s.now),
 		s.snmp,
 		s.vsphere,
 		syncapplications.New(),
 		syncservices.New(),
-		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors},
-		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},
-		syncregistrationstatus.New(option, s.metricsState, s.now),
+		s.monitors,
+		s.metrics,
+		syncregistrationstatus.New(option, s.metrics.MetricsState, s.now),
 		syncgloutonconfig.New(option.ConfigItems),
 		s.diagnostics,
 	}
@@ -260,67 +248,48 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.state.l.Lock()
-	defer s.state.l.Unlock()
-
 	obj := struct {
-		NextFullSync               time.Time
-		HeartBeat                  time.Time
-		HeartbeatConsecutiveError  int
-		FullSyncCount              int
-		StartedAt                  time.Time
-		LastSuccessfulSync         time.Time
-		LastSync                   time.Time
-		LastMetricActivation       time.Time
-		LastFactUpdatedAt          string
-		SuccessiveErrors           int
-		FirstErrorAt               time.Time
-		MaintenanceMode            bool
-		LastMetricCount            int
-		AgentID                    string
-		DisabledUntil              time.Time
-		DisableReason              string
-		LastDuplicateCheck         time.Time
-		NextDuplicateCheck         time.Time
-		ForceSync                  map[types.EntityName]types.SyncRequest
-		PendingMetricsUpdateCount  int
-		PendingMonitorsUpdateCount int
-		DelayedContainer           map[string]time.Time
-		RetryableMetricFailure     map[bleemeoTypes.FailureKind]bool
-		MetricRetryAt              time.Time
-		ThresholdOverrides         string
-		APIFeatures                map[string]bool
-		StateMarkerAuthBroken      time.Time
-		StateMarkerDysfunctional   time.Time
+		NextFullSync              time.Time
+		HeartBeat                 time.Time
+		HeartbeatConsecutiveError int
+		FullSyncCount             int
+		StartedAt                 time.Time
+		LastSuccessfulSync        time.Time
+		LastSync                  time.Time
+		SuccessiveErrors          int
+		FirstErrorAt              time.Time
+		MaintenanceMode           bool
+		AgentID                   string
+		DisabledUntil             time.Time
+		DisableReason             string
+		LastDuplicateCheck        time.Time
+		NextDuplicateCheck        time.Time
+		ForceSync                 map[types.EntityName]types.SyncRequest
+		DelayedContainer          map[string]time.Time
+		APIFeatures               map[string]bool
+		StateMarkerAuthBroken     time.Time
+		StateMarkerDysfunctional  time.Time
 	}{
-		NextFullSync:               s.nextFullSync,
-		HeartBeat:                  s.syncHeartbeat,
-		HeartbeatConsecutiveError:  s.heartbeatConsecutiveError,
-		FullSyncCount:              s.fullSyncCount,
-		StartedAt:                  s.startedAt,
-		LastSuccessfulSync:         s.lastSuccessfulSync,
-		LastSync:                   s.lastSync,
-		LastFactUpdatedAt:          s.state.lastFactUpdatedAt,
-		LastMetricActivation:       s.state.lastMetricActivation,
-		SuccessiveErrors:           s.successiveErrors,
-		FirstErrorAt:               s.firstErrorAt,
-		MaintenanceMode:            s.maintenanceMode,
-		LastMetricCount:            s.state.lastMetricCount,
-		AgentID:                    s.agentID,
-		DisabledUntil:              s.disabledUntil,
-		DisableReason:              s.disableReason.String(),
-		LastDuplicateCheck:         s.lastDuplicateCheck,
-		NextDuplicateCheck:         s.nextDuplicateCheck,
-		ForceSync:                  s.forceSync,
-		PendingMetricsUpdateCount:  len(s.pendingMetricsUpdate),
-		PendingMonitorsUpdateCount: len(s.pendingMonitorsUpdate),
-		DelayedContainer:           delayedContainer,
-		RetryableMetricFailure:     s.retryableMetricFailure,
-		MetricRetryAt:              s.state.metricRetryAt,
-		ThresholdOverrides:         fmt.Sprintf("%v", s.thresholdOverrides),
-		APIFeatures:                make(map[string]bool, len(s.hasFeature)),
-		StateMarkerAuthBroken:      stateGetTime(agentAuthBrokenCacheKey, s.option.State),
-		StateMarkerDysfunctional:   stateGetTime(agentDysfunctionalCacheKey, s.option.State),
+		NextFullSync:              s.nextFullSync,
+		HeartBeat:                 s.syncHeartbeat,
+		HeartbeatConsecutiveError: s.heartbeatConsecutiveError,
+		FullSyncCount:             s.fullSyncCount,
+		StartedAt:                 s.startedAt,
+		LastSuccessfulSync:        s.lastSuccessfulSync,
+		LastSync:                  s.lastSync,
+		SuccessiveErrors:          s.successiveErrors,
+		FirstErrorAt:              s.firstErrorAt,
+		MaintenanceMode:           s.maintenanceMode,
+		AgentID:                   s.agentID,
+		DisabledUntil:             s.disabledUntil,
+		DisableReason:             s.disableReason.String(),
+		LastDuplicateCheck:        s.lastDuplicateCheck,
+		NextDuplicateCheck:        s.nextDuplicateCheck,
+		ForceSync:                 s.forceSync,
+		DelayedContainer:          delayedContainer,
+		APIFeatures:               make(map[string]bool, len(s.hasFeature)),
+		StateMarkerAuthBroken:     stateGetTime(agentAuthBrokenCacheKey, s.option.State),
+		StateMarkerDysfunctional:  stateGetTime(agentDysfunctionalCacheKey, s.option.State),
 	}
 
 	for k, v := range s.hasFeature {
@@ -475,7 +444,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			case IsAuthenticationError(errSync) && s.agentID != "":
 				fqdnMessage := ""
 
-				fqdn := s.option.Cache.FactsByKey()[s.agentID][factFQDN].Value
+				fqdn := s.option.Cache.FactsByKey()[s.agentID][syncfacts.FactFQDN].Value
 				if fqdn != "" {
 					fqdnMessage = " with fqdn " + fqdn
 				}
@@ -530,7 +499,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	return nil //nolint:nilerr
 }
 
-// scheduleMetricSync will run s.syncMetrics after the given delay, in a new goroutine.
+// scheduleMetricSync requests a synchronization of the metrics after the given delay, in a new goroutine.
 func (s *Synchronizer) scheduleMetricSync(ctx context.Context, delay time.Duration) {
 	go func() {
 		defer crashreport.ProcessPanic()
@@ -667,28 +636,23 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 
 // LastMetricActivation return the date at which last metric was activated/registrered.
 func (s *Synchronizer) LastMetricActivation() time.Time {
-	s.state.l.Lock()
-	defer s.state.l.Unlock()
-
-	return s.state.lastMetricActivation
+	return s.metrics.LastMetricActivation()
 }
 
 // UpdateMetrics request to update a specific metrics.
+// A single empty UUID requests to update all the metrics.
 func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
+	all := s.metrics.UpdateMetrics(metricUUID...)
+
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	if len(metricUUID) == 1 && metricUUID[0] == "" {
-		// We don't known the metric to update. Update all
-		s.requestSynchronizationLocked(types.EntityMetric, true)
-		s.pendingMetricsUpdate = nil
+	s.requestSynchronizationLocked(types.EntityMetric, all)
+}
 
-		return
-	}
-
-	s.pendingMetricsUpdate = append(s.pendingMetricsUpdate, metricUUID...)
-
-	s.requestSynchronizationLocked(types.EntityMetric, false)
+// UpdateUnitsAndThresholds updates the units and thresholds of the metrics, from the cache.
+func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
+	s.metrics.UpdateUnitsAndThresholds(firstUpdate)
 }
 
 // UpdateContainers request to update a containers.
@@ -772,19 +736,11 @@ func (s *Synchronizer) SetSuspended(suspended bool) {
 
 // UpdateMonitor requests to update a monitor, identified by its Monitor ID. It allows for adding, updating and removing a monitor.
 func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
+	s.monitors.UpdateMonitor(op, uuid)
+
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	mu := MonitorUpdate{uuid: uuid}
-
-	switch op {
-	case "change":
-		mu.op = Change
-	case "delete":
-		mu.op = Delete
-	}
-
-	s.pendingMonitorsUpdate = append(s.pendingMonitorsUpdate, mu)
 	// ideally we only want to (re)fetch the agent associated with the monitor, but
 	// 1) at this point, we don't know which agent
 	// 2) currently the agent synchronized don't support updating only one agent
@@ -876,26 +832,6 @@ func (s *Synchronizer) ScheduleDiagnosticUpload(filename, requestToken string, c
 	defer s.l.Unlock()
 
 	s.requestSynchronizationLocked(types.EntityDiagnostics, false)
-}
-
-func (s *Synchronizer) popPendingMetricsUpdate() []string {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	set := make(map[string]bool, len(s.pendingMetricsUpdate))
-
-	for _, m := range s.pendingMetricsUpdate {
-		set[m] = true
-	}
-
-	s.pendingMetricsUpdate = nil
-	result := make([]string, 0, len(set))
-
-	for m := range set {
-		result = append(result, m)
-	}
-
-	return result
 }
 
 func (s *Synchronizer) waitCPUMetric(ctx context.Context) {
@@ -1295,7 +1231,7 @@ func (s *Synchronizer) shouldCheckDuplicatedLocked(executionStartedAt time.Time,
 func (s *Synchronizer) checkDuplicated(ctx context.Context, client types.Client) error {
 	oldFacts := s.option.Cache.FactsByKey()
 
-	if err := s.factsUpdateList(ctx, client); err != nil {
+	if err := syncfacts.UpdateList(ctx, client, s.option.Cache); err != nil {
 		return fmt.Errorf("update facts list: %w", err)
 	}
 
@@ -1336,7 +1272,7 @@ func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleeme
 	// we registered, another agent with the same ID must have modified them.
 	// Note that this won't work if the two agents are on the same host
 	// because both agents will send mostly the same facts.
-	factNames := []string{factFQDN, "primary_address", "primary_mac_address", factGloutonPID}
+	factNames := []string{syncfacts.FactFQDN, "primary_address", "primary_mac_address", syncfacts.FactGloutonPID}
 	for _, name := range factNames {
 		old, ok := oldFacts[name]
 		if !ok {
@@ -1352,7 +1288,7 @@ func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleeme
 			continue
 		}
 
-		if name == factGloutonPID {
+		if name == syncfacts.FactGloutonPID {
 			// For the fact glouton_pid we are going to be smarter. We don't want to announce a duplicate state.json
 			// when glouton crash or when its state.cache.json is restored to an older version.
 			// To solve this problem, we check that facts (old & new) where updated *after* Glouton started (this assume fact glouton_pid
@@ -1384,7 +1320,7 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		return err
 	}
 
-	fqdn := facts[factFQDN]
+	fqdn := facts[syncfacts.FactFQDN]
 	if fqdn == "" {
 		return errFQDNNotSet
 	}
@@ -1423,8 +1359,8 @@ func (s *Synchronizer) register(ctx context.Context) error {
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]any{
-			"agent_id":         agentID,
-			factGloutonVersion: version.Version,
+			"agent_id":                   agentID,
+			syncfacts.FactGloutonVersion: version.Version,
 		})
 	})
 
@@ -1456,24 +1392,6 @@ func generatePassword(length int) (string, error) {
 	}
 
 	return string(b), nil
-}
-
-// logThrottle logs a message at most once per hour, all other logs are dropped to prevent spam.
-// key is a throttling key: call with same key are limited to one message every hours.
-// Different keys could each log a message the same hour.
-func (s *Synchronizer) logThrottle(key string, level int, msg string) {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	if s.lastLogByKey == nil {
-		s.lastLogByKey = make(map[string]time.Time)
-	}
-
-	if time.Since(s.lastLogByKey[key]) > time.Hour {
-		logger.V(level).Println(msg)
-
-		s.lastLogByKey[key] = time.Now()
-	}
 }
 
 func (s *Synchronizer) SetMQTTConnected(isConnected bool) {
@@ -1556,6 +1474,11 @@ func stateGetTime(key string, state bleemeoTypes.State) time.Time {
 	}
 
 	return value
+}
+
+// ApplyMonitorUpdate gives the monitors of the cache to the blackbox prober.
+func (s *Synchronizer) ApplyMonitorUpdate() error {
+	return s.monitors.ApplyMonitorUpdate()
 }
 
 // FindSNMPAgent returns the agent of the SNMP target, among agentsByID. snmpType is the ID of

@@ -20,3 +20,16 @@ const (
 	APITagsLength     = 100
 	DiagnosticMaxSize = 5 << 20 // DiagnosticMaxSize = 5MB
 )
+
+const (
+	// ParamFields is the URL query parameter name for specifying API response fields.
+	ParamFields = "fields"
+
+	// ParamAgent is the URL query parameter name for filtering by agent.
+	ParamAgent = "agent"
+)
+
+// MetricFields is the fields used on the API for a metric, we always use all fields to
+// make sure no Metric object is returned with some empty fields which could create bugs.
+const MetricFields = "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at," +
+	"threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,agent"

@@ -205,7 +205,7 @@ func (e *Execution) RequestSynchronization(entityName types.EntityName, forceCac
 
 func (e *Execution) RequestLinkedSynchronization(targetEntityName types.EntityName, triggerEntityName types.EntityName) error {
 	if e.syncListStarted {
-		return fmt.Errorf("%w: RequestLinkedSynchronization must be called during RequestSynchronization()", types.ErrUnexpectedWorkflow)
+		return fmt.Errorf("%w: RequestLinkedSynchronization must be called during NeedSynchronization()", types.ErrUnexpectedWorkflow)
 	}
 
 	for idx, ee := range e.entities {
@@ -219,22 +219,40 @@ func (e *Execution) RequestLinkedSynchronization(targetEntityName types.EntityNa
 	return nil
 }
 
-func (e *Execution) FailOtherEntity(entityName types.EntityName, reason error) {
+// FailOtherEntity fails another entity of this execution, when it is scheduled: an entity that
+// isn't scheduled has nothing to fail. It must be called during RefreshCache or SyncRemoteAndLocal,
+// when the sync types of the execution no longer change.
+func (e *Execution) FailOtherEntity(entityName types.EntityName, reason error) error {
+	if !e.syncListStarted {
+		return fmt.Errorf("%w: FailOtherEntity must be called during RefreshCache() or SyncRemoteAndLocal()", types.ErrUnexpectedWorkflow)
+	}
+
 	for idx, row := range e.entities {
 		if row.entity.Name() == entityName {
-			if row.err == nil {
+			if row.err == nil && row.syncType != types.SyncTypeNone {
 				e.entities[idx].err = reason
 			}
 
 			break
 		}
 	}
+
+	return nil
 }
 
 func (e *Execution) RequestSynchronizationForAll(forceCacheRefresh bool) {
 	for _, row := range e.entities {
 		e.RequestSynchronization(row.entity.Name(), forceCacheRefresh)
 	}
+}
+
+// RequestLaterSynchronization asks for a synchronization of the specified entity to occur within
+// delay, during a later execution. It might happen earlier.
+func (e *Execution) RequestLaterSynchronization(entityName types.EntityName, forceCacheRefresh bool, delay time.Duration) {
+	e.synchronizer.l.Lock()
+	defer e.synchronizer.l.Unlock()
+
+	e.synchronizer.requestLaterSynchronizationLocked(entityName, forceCacheRefresh, delay)
 }
 
 // RequestLaterFullSynchronization ask for a full synchronization to occur within delay. It might happen earlier.
@@ -247,20 +265,6 @@ func (e *Execution) RequestLaterFullSynchronization(delay time.Duration) {
 	if e.synchronizer.nextFullSync.After(targetTime) {
 		e.synchronizer.nextFullSync = targetTime
 	}
-}
-
-// IsSynchronizationRequested return whether a synchronization was request for the
-// specific entity.
-// Note: even if this method return false, a synchronization might occur if someone call RequestSynchronize later.
-// Use RequestLinkedSynchronization to overcome this limitation.
-func (e *Execution) IsSynchronizationRequested(entityName types.EntityName) bool {
-	for _, row := range e.entities {
-		if row.entity.Name() == entityName {
-			return row.syncType != types.SyncTypeNone
-		}
-	}
-
-	return false
 }
 
 func (e *Execution) Option() types.Option {
@@ -316,8 +320,6 @@ func (e *Execution) run(ctx context.Context) error {
 		if e.forceCacheRefreshForAll() {
 			e.RequestSynchronizationForAll(true)
 		}
-
-		compatibilitySyncToPerform(ctx, e, e.synchronizer.state)
 
 		e.applyNeedSynchronization(ctx)
 	}
@@ -475,6 +477,17 @@ func (e *Execution) applyNeedSynchronization(ctx context.Context) {
 			}
 		}
 	})
+
+	// The skipped entities keep errSkippedExecution: what they need is requested again at the
+	// end of the execution.
+	for idx := range e.entities {
+		ee := &e.entities[idx]
+
+		entity, ok := ee.entity.(types.NeedSynchronizationWhileSkipped)
+		if ok && errors.Is(ee.err, errSkippedExecution) && entity.NeedSynchronizationWhileSkipped(ctx, e) && ee.syncType == types.SyncTypeNone {
+			ee.syncType = types.SyncTypeNormal
+		}
+	}
 }
 
 func (e *Execution) checkLinkedSynchronization() {

@@ -25,6 +25,7 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
 
@@ -319,9 +320,15 @@ func Test_syncRemoteAndLocal_createError(t *testing.T) {
 	}
 }
 
+// mockAPI keeps the applications of the API, and records the calls. Any call other than the
+// applications' panics.
 type mockAPI struct {
+	types.Client
+
 	lastID              int
 	ListResponse        []bleemeoTypes.Application
+	ListErr             error
+	ListCalls           int
 	CreatedApplications []bleemeoTypes.Application
 	CreateErr           error
 	CreateCalls         int
@@ -330,7 +337,9 @@ type mockAPI struct {
 func (api *mockAPI) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
 	_ = ctx
 
-	return api.ListResponse, nil
+	api.ListCalls++
+
+	return api.ListResponse, api.ListErr
 }
 
 func (api *mockAPI) CreateApplication(ctx context.Context, app bleemeoTypes.Application) (bleemeoTypes.Application, error) {

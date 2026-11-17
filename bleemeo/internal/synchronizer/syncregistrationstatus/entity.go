@@ -19,7 +19,6 @@ package syncregistrationstatus
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"slices"
 	"time"
 
@@ -47,14 +46,10 @@ type SyncRegistrationStatus struct {
 	// now is the clock a send is recorded with.
 	now func() time.Time
 
-	// lastBuildAt is when NeedSynchronization last built a payload.
+	// lastBuildAt is when payloadToSend last built a payload.
 	lastBuildAt time.Time
-	// discoveryReadyAt is when NeedSynchronization first saw a completed discovery.
+	// discoveryReadyAt is when payloadToSend first saw a completed discovery.
 	discoveryReadyAt time.Time
-
-	currentExecution types.SynchronizationExecution
-	// payload is what NeedSynchronization decided to send, nil when nothing is to be sent.
-	payload *Payload
 }
 
 // New returns the entity, which reads the not-registered metrics from metricsState, along
@@ -76,47 +71,61 @@ func (s *SyncRegistrationStatus) EnabledInSuspendedMode() bool {
 }
 
 func (s *SyncRegistrationStatus) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
-	s.currentExecution = execution
+	return &syncRegistrationStatusExecution{
+		parent:    s,
+		execution: execution,
+	}, nil
+}
 
-	return s, nil
+type syncRegistrationStatusExecution struct {
+	parent    *SyncRegistrationStatus
+	execution types.SynchronizationExecution
+	// payload is what NeedSynchronization decided to send, nil when nothing is to be sent.
+	payload *Payload
 }
 
 // NeedSynchronization builds the payload and tells whether to send it. It is built here, from
 // the state the previous execution left, because a true answer alone makes the execution call
 // the API (see Execution.hadWork).
-func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, error) {
-	if s.currentExecution == nil {
-		return false, fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
-	}
+func (e *syncRegistrationStatusExecution) NeedSynchronization(_ context.Context) (bool, error) {
+	e.payload = e.parent.payloadToSend(e.execution)
 
+	return e.payload != nil, nil
+}
+
+// payloadToSend builds the payload when a send may be due, and returns it when it should be
+// sent, nil otherwise. It records the build in lastBuildAt and the first completed discovery in
+// discoveryReadyAt, so it must be called once per execution: a second call would hold the next
+// build back for minNewServiceInterval.
+func (s *SyncRegistrationStatus) payloadToSend(execution types.SynchronizationExecution) *Payload {
 	// An essential-only execution does not synchronize metrics, so their state is not current.
-	if s.currentExecution.IsOnlyEssential() {
-		return false, nil
+	if execution.IsOnlyEssential() {
+		return nil
 	}
 
-	option := s.currentExecution.Option()
+	option := execution.Option()
 
 	agentID, _ := option.State.BleemeoCredentials()
 	if agentID == "" {
-		return false, nil
+		return nil
 	}
 
 	if !sendEnabled(option) {
-		return false, nil
+		return nil
 	}
 
 	last := option.Cache.RegistrationStatusSent()
-	now := s.currentExecution.StartedAt()
+	now := execution.StartedAt()
 
 	if !MaySend(last, agentID, now) {
-		return false, nil
+		return nil
 	}
 
 	// Built at most once per minNewServiceInterval, the shortest delay before a send, rather
 	// than on each execution: building reads discovery and both lists, encodes and hashes them.
 	// A clock that went back builds at once.
 	if !s.lastBuildAt.IsZero() && !now.Before(s.lastBuildAt) && now.Sub(s.lastBuildAt) < minNewServiceInterval {
-		return false, nil
+		return nil
 	}
 
 	// Until discovery ran and a synchronization published the metrics state, both lists are
@@ -124,7 +133,7 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 	// restart, and the next change may not be sent before minSendInterval.
 	lastDiscovery := option.Discovery.LastDiscoveryAt()
 	if lastDiscovery.IsZero() {
-		return false, nil
+		return nil
 	}
 
 	if s.discoveryReadyAt.IsZero() {
@@ -135,7 +144,7 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 	// execution, and reading an unpublished state is cheap.
 	metrics, published := s.metricsState()
 	if !published && now.Sub(s.discoveryReadyAt) < metricsStateWait {
-		return false, nil
+		return nil
 	}
 
 	s.lastBuildAt = now
@@ -144,46 +153,40 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 	if err != nil {
 		logger.V(1).Printf("Unable to read the metrics for the registration status: %v", err)
 
-		return false, nil
+		return nil
 	}
 
 	if now.Sub(s.discoveryReadyAt) < collectionWait && slices.ContainsFunc(services, isCollectionPending) {
-		return false, nil
+		return nil
 	}
 
 	payload := stampedPayload(services, metrics, published, now, lastDiscovery)
 
 	if !NeedSend(last, payload, agentID, now) {
-		return false, nil
+		return nil
 	}
 
-	s.payload = &payload
-
-	return true, nil
+	return &payload
 }
 
-func (s *SyncRegistrationStatus) RefreshCache(_ context.Context, _ types.SyncType) error {
+func (e *syncRegistrationStatusExecution) RefreshCache(_ context.Context, _ types.SyncType) error {
 	return nil
 }
 
 // SyncRemoteAndLocal sends the payload NeedSynchronization chose. An execution may call it
 // without, when every entity is requested: then there is nothing to send.
-func (s *SyncRegistrationStatus) SyncRemoteAndLocal(ctx context.Context, _ types.SyncType) error {
-	if s.currentExecution == nil {
-		return fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
-	}
-
-	if s.payload == nil {
+func (e *syncRegistrationStatusExecution) SyncRemoteAndLocal(ctx context.Context, _ types.SyncType) error {
+	if e.payload == nil {
 		return nil
 	}
 
-	option := s.currentExecution.Option()
+	option := e.execution.Option()
 	agentID, _ := option.State.BleemeoCredentials()
 	// When the send happens, not when the execution started: the delays before the next send
 	// run from it, and an execution can last long.
-	now := s.now()
+	now := e.parent.now()
 
-	err := s.currentExecution.BleemeoAPIClient().UpdateAgentRegistrationStatus(ctx, agentID, s.payload)
+	err := e.execution.BleemeoAPIClient().UpdateAgentRegistrationStatus(ctx, agentID, e.payload)
 	if err != nil {
 		option.Cache.SetRegistrationStatusSent(SendFailed(option.Cache.RegistrationStatusSent(), agentID, now))
 
@@ -199,7 +202,7 @@ func (s *SyncRegistrationStatus) SyncRemoteAndLocal(ctx context.Context, _ types
 		return err
 	}
 
-	option.Cache.SetRegistrationStatusSent(Sent(*s.payload, agentID, now))
+	option.Cache.SetRegistrationStatusSent(Sent(*e.payload, agentID, now))
 
 	return nil
 }
@@ -290,7 +293,5 @@ func isCollectionPending(state ServiceState) bool {
 	return state.CollectionPending
 }
 
-func (s *SyncRegistrationStatus) FinishExecution(_ context.Context) {
-	s.currentExecution = nil
-	s.payload = nil
+func (e *syncRegistrationStatusExecution) FinishExecution(_ context.Context) {
 }

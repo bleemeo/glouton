@@ -79,15 +79,9 @@ type syncSNMPExecution struct {
 	execution types.SynchronizationExecution
 }
 
-// NeedSynchronization synchronizes the SNMP agents, and their facts, when the number of SNMP
-// targets online changes.
+// NeedSynchronization synchronizes the SNMP agents when the number of SNMP targets online
+// changes. The facts entity synchronizes their facts with them.
 func (e *syncSNMPExecution) NeedSynchronization(_ context.Context) (bool, error) {
-	// The facts include the facts of the SNMP agents.
-	// TODO: move to the facts entity when it gets migrated.
-	if err := e.execution.RequestLinkedSynchronization(types.EntityFact, types.EntitySNMP); err != nil {
-		return false, err
-	}
-
 	// SyncRemoteAndLocal only updates lastCount once it succeeds, so a failed synchronization
 	// is retried on the next execution.
 	return e.execution.Option().SNMPOnlineTarget() != e.parent.lastCount, nil

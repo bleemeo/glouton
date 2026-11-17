@@ -88,12 +88,14 @@ func (e *fakeExecution) BleemeoAPIClient() types.Client { return e.client }
 func (e *fakeExecution) IsOnlyEssential() bool          { return e.onlyEssential }
 func (e *fakeExecution) RequestNotifyLabelsUpdate()     { e.labelsRequested++ }
 
-func (e *fakeExecution) FailOtherEntity(entityName types.EntityName, reason error) {
+func (e *fakeExecution) FailOtherEntity(entityName types.EntityName, reason error) error {
 	if e.failed == nil {
 		e.failed = make(map[types.EntityName]error)
 	}
 
 	e.failed[entityName] = reason
+
+	return nil
 }
 
 func (e *fakeExecution) Option() types.Option {
