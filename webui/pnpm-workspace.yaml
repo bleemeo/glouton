@@ -1,6 +1,5 @@
 minimumReleaseAge: 2880 # 1440 minutes = 1 day
 ignoreScripts: true
-ignoreDepScripts: true
 
 overrides:
   # Vite 8.0.16 (latest) still ships esbuild 0.27.7, which has
