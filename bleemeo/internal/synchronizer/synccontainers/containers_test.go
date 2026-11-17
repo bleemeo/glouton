@@ -41,9 +41,12 @@ const testAgentID = "agent-id"
 
 func testNow() time.Time { return time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC) }
 
-// fakeClient records the containers registered and updated. UpdateContainer returns NotFound for
-// the IDs of notFound.
+// fakeClient counts the lists of containers, and records the containers registered and updated.
+// UpdateContainer returns NotFound for the IDs of notFound. Any other call panics.
 type fakeClient struct {
+	types.Client
+
+	listed     int
 	registered []bleemeoapi.ContainerPayload
 	// updated is the payloads of UpdateContainer, by container ID.
 	updated  map[string]any
@@ -52,6 +55,8 @@ type fakeClient struct {
 }
 
 func (c *fakeClient) ListContainers(context.Context, string) ([]bleemeoTypes.Container, error) {
+	c.listed++
+
 	return nil, nil
 }
 
@@ -244,28 +249,36 @@ func (s fakeGlobalState) DelayedContainers() (map[string]time.Time, time.Time) {
 	return nil, s.minDelayed
 }
 
-// fakeExecution gives the discovery and the times to the entity. Any other call panics.
+// fakeExecution gives the discovery, the times, the cache, the client and the failures in a row
+// to the entity. Any other call panics.
 type fakeExecution struct {
 	types.SynchronizationExecution
 
 	discovery          *discovery.MockDiscoverer
 	minDelayed         time.Time
 	lastSuccessfulSync time.Time
+	cache              *cache.Cache
+	client             types.Client
+	failures           int
 }
 
 func (e *fakeExecution) Option() types.Option {
-	return types.Option{Discovery: e.discovery}
+	return types.Option{Discovery: e.discovery, Cache: e.cache}
 }
+
+func (e *fakeExecution) BleemeoAPIClient() types.Client { return e.client }
+
+func (e *fakeExecution) ConsecutiveFailures(types.EntityName) int { return e.failures }
 
 func (e *fakeExecution) GlobalState() types.SynchronizedGlobalState {
 	return fakeGlobalState{minDelayed: e.minDelayed}
 }
 
-func (e *fakeExecution) LastSuccessfulSync() time.Time { return e.lastSuccessfulSync }
-func (e *fakeExecution) StartedAt() time.Time          { return testNow() }
+func (e *fakeExecution) LastSuccessfulSync(types.EntityName) time.Time { return e.lastSuccessfulSync }
+func (e *fakeExecution) StartedAt() time.Time                          { return testNow() }
 
 // TestNeedSynchronization checks the containers are synchronized after a discovery, and once a
-// delayed container is due, also while they are skipped in maintenance or suspended mode.
+// delayed container is due.
 func TestNeedSynchronization(t *testing.T) {
 	t.Parallel()
 
@@ -304,9 +317,46 @@ func TestNeedSynchronization(t *testing.T) {
 			if err != nil || need != tt.want {
 				t.Errorf("NeedSynchronization() = %v, %v, want %v", need, err, tt.want)
 			}
+		})
+	}
+}
 
-			if need := s.NeedSynchronizationWhileSkipped(t.Context(), execution); need != tt.want {
-				t.Errorf("NeedSynchronizationWhileSkipped() = %v, want %v", need, tt.want)
+// TestRefreshCacheAfterFailures checks the containers are listed on a cache refresh, and after
+// their own 3 failures in a row.
+func TestRefreshCacheAfterFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		syncType   types.SyncType
+		failures   int
+		wantListed bool
+	}{
+		{name: "normal", syncType: types.SyncTypeNormal, failures: 0, wantListed: false},
+		{name: "cache refresh", syncType: types.SyncTypeForceCacheRefresh, failures: 0, wantListed: true},
+		{name: "2 failures", syncType: types.SyncTypeNormal, failures: 2, wantListed: false},
+		{name: "3 failures", syncType: types.SyncTypeNormal, failures: 3, wantListed: true},
+		{name: "4 failures", syncType: types.SyncTypeNormal, failures: 4, wantListed: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			client := &fakeClient{}
+			execution := &fakeExecution{cache: &cache.Cache{}, client: client, failures: test.failures}
+
+			e, err := New(testNow).PrepareExecution(t.Context(), execution)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := e.RefreshCache(t.Context(), test.syncType); err != nil {
+				t.Fatal(err)
+			}
+
+			if got := client.listed > 0; got != test.wantListed {
+				t.Errorf("containers listed = %v, want %v", got, test.wantListed)
 			}
 		})
 	}

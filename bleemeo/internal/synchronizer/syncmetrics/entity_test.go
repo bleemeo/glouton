@@ -76,10 +76,19 @@ type fakeExecution struct {
 	executiontest.Recorder
 
 	lastSuccessfulSync time.Time
+	// entityLastSync overrides lastSuccessfulSync for these entities.
+	entityLastSync map[types.EntityName]time.Time
 }
 
-func (e *fakeExecution) StartedAt() time.Time          { return testNow() }
-func (e *fakeExecution) LastSuccessfulSync() time.Time { return e.lastSuccessfulSync }
+func (e *fakeExecution) StartedAt() time.Time { return testNow() }
+
+func (e *fakeExecution) LastSuccessfulSync(entityName types.EntityName) time.Time {
+	if lastSync, ok := e.entityLastSync[entityName]; ok {
+		return lastSync
+	}
+
+	return e.lastSuccessfulSync
+}
 
 // newExecution returns an execution of a new entity, which last synchronized at lastSync.
 func newExecution(option types.Option, lastSync time.Time) (*syncMetricsExecution, *fakeExecution) {
@@ -94,29 +103,56 @@ func newExecution(option types.Option, lastSync time.Time) (*syncMetricsExecutio
 }
 
 // TestNeedSynchronization checks the metrics are synchronized when a registration retry is due,
-// after a discovery or an annotation change, and when the number of metrics changes, also while
-// they are skipped in maintenance or suspended mode, and with the containers and the monitors.
+// after a discovery or an annotation change, when the number of metrics changes, and when metrics
+// wait for a dependency which synchronized since.
 func TestNeedSynchronization(t *testing.T) {
 	t.Parallel()
 
 	lastSync := testNow().Add(-time.Minute)
 	before := lastSync.Add(-time.Minute)
 	after := lastSync.Add(time.Second)
+	retryLater := testNow().Add(time.Minute)
 
 	tests := []struct {
-		name       string
-		retryAt    time.Time
-		discovery  time.Time
-		annotation time.Time
-		lastCount  int
-		count      int
-		want       bool
+		name              string
+		retryAt           time.Time
+		discovery         time.Time
+		annotation        time.Time
+		lastCount         int
+		count             int
+		waitingDependency bool
+		dependencySync    map[types.EntityName]time.Time
+		want              bool
 	}{
-		{name: "nothing new", retryAt: testNow().Add(time.Minute), discovery: before, annotation: before, want: false},
+		{name: "nothing new", retryAt: retryLater, discovery: before, annotation: before, want: false},
 		{name: "retry due", retryAt: testNow().Add(-time.Second), discovery: before, annotation: before, want: true},
-		{name: "discovery", retryAt: testNow().Add(time.Minute), discovery: after, annotation: before, want: true},
-		{name: "annotation change", retryAt: testNow().Add(time.Minute), discovery: before, annotation: after, want: true},
-		{name: "metric count change", retryAt: testNow().Add(time.Minute), discovery: before, annotation: before, lastCount: 3, count: 4, want: true},
+		{name: "discovery", retryAt: retryLater, discovery: after, annotation: before, want: true},
+		{name: "annotation change", retryAt: retryLater, discovery: before, annotation: after, want: true},
+		{name: "metric count change", retryAt: retryLater, discovery: before, annotation: before, lastCount: 3, count: 4, want: true},
+		{
+			name: "waiting, container synchronized since", retryAt: retryLater, discovery: before, annotation: before,
+			waitingDependency: true, dependencySync: map[types.EntityName]time.Time{types.EntityContainer: after}, want: true,
+		},
+		{
+			name: "waiting, service synchronized since", retryAt: retryLater, discovery: before, annotation: before,
+			waitingDependency: true, dependencySync: map[types.EntityName]time.Time{types.EntityService: after}, want: true,
+		},
+		{
+			name: "waiting, monitor synchronized since", retryAt: retryLater, discovery: before, annotation: before,
+			waitingDependency: true, dependencySync: map[types.EntityName]time.Time{types.EntityMonitor: after}, want: true,
+		},
+		{
+			name: "waiting, dependencies synchronized before", retryAt: retryLater, discovery: before, annotation: before,
+			waitingDependency: true, want: false,
+		},
+		{
+			name: "not waiting, container synchronized since", retryAt: retryLater, discovery: before, annotation: before,
+			dependencySync: map[types.EntityName]time.Time{types.EntityContainer: after}, want: false,
+		},
+		{
+			name: "waiting, other entity synchronized since", retryAt: retryLater, discovery: before, annotation: before,
+			waitingDependency: true, dependencySync: map[types.EntityName]time.Time{types.EntitySNMP: after}, want: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -132,22 +168,16 @@ func TestNeedSynchronization(t *testing.T) {
 			s, execution := newExecution(option, lastSync)
 			s.metricRetryAt = tt.retryAt
 			s.lastMetricCount = tt.lastCount
+			s.waitingDependency = tt.waitingDependency
+			execution.entityLastSync = tt.dependencySync
 
 			need, err := s.NeedSynchronization(t.Context())
 			if err != nil || need != tt.want {
 				t.Errorf("NeedSynchronization() = %v, %v, want %v", need, err, tt.want)
 			}
 
-			if need := s.NeedSynchronizationWhileSkipped(t.Context(), execution); need != tt.want {
-				t.Errorf("NeedSynchronizationWhileSkipped() = %v, want %v", need, tt.want)
-			}
-
-			want := [][2]types.EntityName{
-				{types.EntityMetric, types.EntityContainer},
-				{types.EntityMetric, types.EntityMonitor},
-			}
-			if diff := cmp.Diff(want, execution.Linked); diff != "" {
-				t.Errorf("linked synchronizations mismatch (-want +got)\n%s", diff)
+			if len(execution.Linked) != 0 {
+				t.Errorf("linked synchronizations %v, want none", execution.Linked)
 			}
 		})
 	}

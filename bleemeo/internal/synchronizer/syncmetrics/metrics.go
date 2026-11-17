@@ -420,6 +420,7 @@ func (s *syncMetricsExecution) excludeUnregistrableMetrics(
 		if annotations.ContainerID != "" && !common.IgnoreContainer(cfg, metric.Labels()) {
 			_, ok := containersByContainerID[annotations.ContainerID]
 			if !ok {
+				s.dependencyMissing = true
 				s.countNotRegistered(notRegistered, metric, bleemeoTypes.ReasonWaitingContainer)
 
 				continue
@@ -431,6 +432,7 @@ func (s *syncMetricsExecution) excludeUnregistrableMetrics(
 			srvKey := common.ServiceNameInstance{Name: annotations.ServiceName, Instance: annotations.ServiceInstance}
 
 			if _, ok := servicesByKey[srvKey]; !ok {
+				s.dependencyMissing = true
 				s.countNotRegistered(notRegistered, metric, bleemeoTypes.ReasonWaitingService)
 
 				continue
@@ -556,8 +558,11 @@ func (s *syncMetricsExecution) syncMetrics(ctx context.Context, syncType types.S
 		return false, err
 	}
 
-	if s.execution.GlobalState().SuccessiveErrors() == 3 {
-		// After 3 error, try to force a full synchronization to see if it solve the issue.
+	s.dependencyMissing = false
+
+	if s.execution.ConsecutiveFailures(types.EntityMetric) == 3 {
+		// After 3 failures of the metrics in a row, try a cache refresh to see if it solves the
+		// issue.
 		syncType = types.SyncTypeForceCacheRefresh
 	}
 
@@ -627,7 +632,13 @@ func (s *syncMetricsExecution) syncMetrics(ctx context.Context, syncType types.S
 	filteredMetrics = s.filterMetrics(localMetrics)
 	filteredMetrics = prioritizeAndFilterMetrics(filteredMetrics, s.execution.IsOnlyEssential())
 
-	if err = newMetricRegisterer(s, apiClient).registerMetrics(ctx, filteredMetrics); err != nil {
+	err = newMetricRegisterer(s, apiClient).registerMetrics(ctx, filteredMetrics)
+
+	s.l.Lock()
+	s.waitingDependency = s.dependencyMissing
+	s.l.Unlock()
+
+	if err != nil {
 		return updateThresholds, err
 	}
 
@@ -1268,6 +1279,8 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(ctx context.Context, metr
 
 	payload, err := mr.s.prepareMetricPayload(metric, mr.registeredMetricsByKey, mr.containersByContainerID, mr.servicesByKey, mr.monitors)
 	if errors.Is(err, errIgnore) {
+		mr.s.dependencyMissing = true
+
 		return nil
 	}
 
@@ -1340,7 +1353,7 @@ func (s *syncMetricsExecution) prepareMetricPayload(
 	if annotations.ContainerID != "" && !common.IgnoreContainer(cfg, metric.Labels()) {
 		container, ok := containersByContainerID[annotations.ContainerID]
 		if !ok {
-			// No error. When container get registered we trigger a metric synchronization.
+			// No error. Once the containers synchronize, the metrics synchronize again.
 			return payload, errIgnore
 		}
 
@@ -1352,7 +1365,7 @@ func (s *syncMetricsExecution) prepareMetricPayload(
 
 		service, ok := servicesByKey[srvKey]
 		if !ok {
-			// No error. When service get registered we trigger a metric synchronization
+			// No error. Once the services synchronize, the metrics synchronize again.
 			return payload, errIgnore
 		}
 
@@ -1392,8 +1405,8 @@ func (s *syncMetricsExecution) prepareMetricPayloadOtherAgent(payload *bleemeoap
 
 	// This is not an error: either this is a metric from a local monitor, and it should
 	// never be registered, or this is from a monitor that is not yet loaded, and it is
-	// not an issue per se as it will get registered when monitors are loaded, as it will
-	// trigger a metric synchronization.
+	// not an issue per se as it will get registered once the monitors synchronize, as the
+	// metrics synchronize again then.
 	return errIgnore
 }
 

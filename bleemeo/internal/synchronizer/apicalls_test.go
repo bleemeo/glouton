@@ -71,7 +71,10 @@ func (vSphereVMMock) LatestError() error       { return nil }
 // Any change of the calls made fails it.
 // The steps stay less than 15 minutes apart, except the full synchronization, so the periodic
 // duplicated agent check, jittered between 15 and 25 minutes, always runs at the same steps.
-var errMonitorsUnavailable = errors.New("monitors unavailable")
+var (
+	errMonitorsUnavailable = errors.New("monitors unavailable")
+	errServicesUnavailable = errors.New("services unavailable")
+)
 
 const metricMemUsed = "mem_used"
 
@@ -189,7 +192,6 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			wantSync: map[types.EntityName]types.SyncType{
 				types.EntityAgent:   types.SyncTypeForceCacheRefresh,
 				types.EntityMonitor: types.SyncTypeNormal,
-				types.EntityMetric:  types.SyncTypeNormal,
 			},
 		},
 		{
@@ -205,13 +207,14 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			prepare: func() {
 				snmpOnline = 1
 			},
+			wantSync: map[types.EntityName]types.SyncType{types.EntitySNMP: types.SyncTypeNormal},
+		},
+		{
 			// The SNMP agent was registered by the first full synchronization, which synchronized
-			// the facts before it: its facts are registered now.
+			// the facts before it: its facts are registered once the SNMP agents synchronized.
+			name:      "facts after the SNMP agents",
 			wantCalls: map[string]int{"ListFacts": 1, "RegisterFact": 1},
-			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityFact: types.SyncTypeNormal,
-				types.EntitySNMP: types.SyncTypeNormal,
-			},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityFact: types.SyncTypeNormal},
 		},
 		{
 			name: "vSphere device discovered",
@@ -348,7 +351,6 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			wantSync: map[types.EntityName]types.SyncType{
 				types.EntityAgent:   types.SyncTypeForceCacheRefresh,
 				types.EntityMonitor: types.SyncTypeNormal,
-				types.EntityMetric:  types.SyncTypeNormal,
 			},
 		},
 		{
@@ -372,10 +374,7 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			},
 			// The failed update is retried a minute later.
 			wantCalls: map[string]int{"GetMonitorByID": 1},
-			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityMonitor: types.SyncTypeNormal,
-				types.EntityMetric:  types.SyncTypeNormal,
-			},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMonitor: types.SyncTypeNormal},
 		},
 		{
 			name: "new metric",
@@ -462,16 +461,14 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			},
 		},
 		{
-			// A discovery during the maintenance: the containers and the metrics are skipped, and
-			// requested again on each execution until it ends.
+			// A discovery during the maintenance: the containers, services and metrics are skipped.
+			// Their last success stays older than the discovery, so they run after the maintenance.
 			name: "maintenance not polled again",
 			prepare: func() {
 				helper.discovery.UpdatedAt = helper.Now()
 			},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityAgent:     types.SyncTypeForceCacheRefresh,
-				types.EntityContainer: types.SyncTypeNormal,
-				types.EntityMetric:    types.SyncTypeNormal,
+				types.EntityAgent: types.SyncTypeForceCacheRefresh,
 			},
 		},
 		{
@@ -485,20 +482,21 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 			},
 			wantCalls: map[string]int{"GetGlobalInfo": 1, "ListFacts": 1},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityInfo:      types.SyncTypeNormal,
-				types.EntityAgent:     types.SyncTypeForceCacheRefresh,
-				types.EntityContainer: types.SyncTypeNormal,
-				types.EntityMetric:    types.SyncTypeNormal,
+				types.EntityInfo:  types.SyncTypeNormal,
+				types.EntityAgent: types.SyncTypeForceCacheRefresh,
 			},
 		},
 		{
-			// The entities skipped during the maintenance, including for its discovery, run now.
+			// The entities skipped during the maintenance run now: the containers, services (and
+			// the applications they need) and metrics weren't synchronized since the discovery.
 			name:      "after maintenance",
 			wantCalls: map[string]int{"ListAgents": 1, "UpdateAgent": 1},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityAgent:     types.SyncTypeForceCacheRefresh,
-				types.EntityContainer: types.SyncTypeNormal,
-				types.EntityMetric:    types.SyncTypeNormal,
+				types.EntityAgent:       types.SyncTypeForceCacheRefresh,
+				types.EntityApplication: types.SyncTypeNormal,
+				types.EntityContainer:   types.SyncTypeNormal,
+				types.EntityMetric:      types.SyncTypeNormal,
+				types.EntityService:     types.SyncTypeNormal,
 			},
 		},
 		{
@@ -594,6 +592,93 @@ func TestAPICallsBaseline(t *testing.T) { //nolint:maintidx // The script is a t
 		},
 		{
 			name: "nothing changed after reload",
+		},
+		{
+			// Only the monitors fail: the full synchronization is done for the other entities.
+			name: "full synchronization, monitors failing",
+			prepare: func() {
+				helper.SetTimeToNextFullSync()
+
+				// As in the full synchronization above: without a recent point, the metric would
+				// sometimes be deactivated.
+				helper.pushPoints(t, []labels.Labels{
+					labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: metricCPUUsed}),
+				})
+
+				helper.wrapperClientMock.monitorsErr = errMonitorsUnavailable
+			},
+			// The duplicated agent check is due again, it makes the ListFacts.
+			wantCalls: map[string]int{
+				"GetGlobalInfo":          1,
+				"ListActiveMetrics":      1,
+				"ListAgentTypes":         1,
+				"ListAgents":             1,
+				"ListApplications":       1,
+				"ListConfigs":            2,
+				"ListContainers":         1,
+				"ListDiagnostics":        1,
+				"ListFacts":              1,
+				"ListGloutonConfigItems": 1,
+				"ListMonitors":           1,
+				"ListServices":           1,
+				"UpdateAgent":            1,
+			},
+			wantSync: fullSync,
+			wantErr:  true,
+		},
+		{
+			// Only the monitors are refreshed again: not the whole full synchronization. No
+			// metric waits for them, the metrics aren't refreshed with them.
+			name: "only the monitors refreshed",
+			prepare: func() {
+				helper.wrapperClientMock.monitorsErr = nil
+			},
+			wantCalls: map[string]int{"ListMonitors": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMonitor: types.SyncTypeForceCacheRefresh},
+		},
+		{
+			name: "nothing changed after the monitors",
+		},
+		{
+			// The monitor update fails, the discovery is synchronized.
+			name: "discovery, a monitor update failing",
+			prepare: func() {
+				helper.wrapperClientMock.monitorsErr = errMonitorsUnavailable
+				helper.s.UpdateMonitor("change", newMonitor.ID)
+
+				helper.discovery.UpdatedAt = helper.Now()
+			},
+			wantCalls: map[string]int{"GetMonitorByID": 1, "ListAgents": 1, "UpdateAgent": 1},
+			wantSync: map[types.EntityName]types.SyncType{
+				types.EntityAgent:       types.SyncTypeForceCacheRefresh,
+				types.EntityApplication: types.SyncTypeNormal,
+				types.EntityContainer:   types.SyncTypeNormal,
+				types.EntityMetric:      types.SyncTypeNormal,
+				types.EntityMonitor:     types.SyncTypeNormal,
+				types.EntityService:     types.SyncTypeNormal,
+			},
+			wantErr: true,
+		},
+		{
+			// Only the monitor update is retried: the discovery was synchronized, even though the
+			// execution failed.
+			name: "monitor update still failing",
+			prepare: func() {
+				helper.AddTime(time.Minute)
+			},
+			wantCalls: map[string]int{"GetMonitorByID": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMonitor: types.SyncTypeNormal},
+			wantErr:   true,
+		},
+		{
+			name: "monitor update retried",
+			prepare: func() {
+				helper.wrapperClientMock.monitorsErr = nil
+
+				helper.AddTime(time.Minute)
+			},
+			wantCalls: map[string]int{"GetMonitorByID": 1},
+			wantSync:  map[types.EntityName]types.SyncType{types.EntityMonitor: types.SyncTypeNormal},
 		},
 	}
 

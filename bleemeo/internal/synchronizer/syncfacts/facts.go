@@ -105,22 +105,16 @@ func (s *SyncFacts) EnabledInSuspendedMode() bool {
 	return false
 }
 
-// NeedSynchronizationWhileSkipped returns whether the facts were updated, like
-// NeedSynchronization, while they are skipped in maintenance or suspended mode: the
-// synchronization stays requested until they run.
-func (s *SyncFacts) NeedSynchronizationWhileSkipped(ctx context.Context, execution types.SynchronizationExecution) bool {
-	return s.needSynchronization(ctx, execution)
-}
-
 // needSynchronization returns whether the facts were updated since the last facts fully
-// synchronized.
+// synchronized, or the SNMP agents synchronized since the facts last did.
 func (s *SyncFacts) needSynchronization(ctx context.Context, execution types.SynchronizationExecution) bool {
 	localFacts, _ := execution.Option().Facts.Facts(ctx, 24*time.Hour)
 
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	return s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt]
+	return s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] ||
+		execution.LastSuccessfulSync(types.EntitySNMP).After(execution.LastSuccessfulSync(types.EntityFact))
 }
 
 func (s *SyncFacts) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
@@ -157,13 +151,9 @@ type syncFactsExecution struct {
 	execution types.SynchronizationExecution
 }
 
-// NeedSynchronization synchronizes the facts when they were updated, and when the SNMP agents
-// are synchronized: the facts include theirs.
+// NeedSynchronization synchronizes the facts when they were updated, and after the SNMP agents
+// synchronized: the facts include theirs.
 func (e *syncFactsExecution) NeedSynchronization(ctx context.Context) (bool, error) {
-	if err := e.execution.RequestLinkedSynchronization(types.EntityFact, types.EntitySNMP); err != nil {
-		return false, err
-	}
-
 	return e.parent.needSynchronization(ctx, e.execution), nil
 }
 

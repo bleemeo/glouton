@@ -540,7 +540,10 @@ type CustomTransportOptions struct {
 	UserAgentHeader string
 	// RequestCounter will be incremented for each HTTP transaction.
 	RequestCounter *atomic.Uint32
-	EnableLogger   bool
+	// AuthenticatedSuccessCounter, when set, is incremented for each request with a bearer
+	// token that the server answered without error.
+	AuthenticatedSuccessCounter *atomic.Uint32
+	EnableLogger                bool
 }
 
 type customTransport struct {
@@ -556,7 +559,14 @@ func (tc *customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		logger.V(2).Printf("Sending API request %v %v", r.Method, r.URL)
 	}
 
-	return tc.transport.RoundTrip(r)
+	resp, err := tc.transport.RoundTrip(r)
+
+	if tc.opts.AuthenticatedSuccessCounter != nil && err == nil && resp.StatusCode < http.StatusBadRequest &&
+		strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+		tc.opts.AuthenticatedSuccessCounter.Add(1)
+	}
+
+	return resp, err
 }
 
 // NewHTTPTransport returns a default Transport with a modified TLSClientConfig.

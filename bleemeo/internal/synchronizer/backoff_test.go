@@ -1,0 +1,335 @@
+// Copyright 2015-2026 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package synchronizer
+
+import (
+	"errors"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/bleemeo/bleemeo-go"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+)
+
+var errEntityFailed = errors.New("entity failed")
+
+// TestEntityBackoff checks that a failed entity waits for its retry delay, which grows with
+// its failures, without blocking the other entities.
+func TestEntityBackoff(t *testing.T) {
+	helper := newFullSyncHelper(t)
+	defer helper.Close()
+
+	helper.wrapperClientMock.monitorsErr = errMonitorsUnavailable
+
+	if result := helper.runOnceWithResult(t); result.err == nil {
+		t.Fatal("runOnce succeeded, want the monitors' error")
+	}
+
+	firstDelay := checkRetryDelay(t, helper, 15*time.Second)
+
+	// The monitors wait for their retry delay, the other entities still synchronize.
+	helper.s.UpdateInfo()
+
+	result := helper.runOnceWithResult(t)
+	if result.err != nil {
+		t.Fatal(result.err)
+	}
+
+	if _, ok := result.syncPerEntity[types.EntityMonitor]; ok {
+		t.Errorf("monitors synchronized during their retry delay: %v", result.syncPerEntity)
+	}
+
+	// The monitors would have made the metrics refresh: they don't while left out.
+	if _, ok := result.syncPerEntity[types.EntityMetric]; ok {
+		t.Errorf("metrics synchronized with the monitors left out: %v", result.syncPerEntity)
+	}
+
+	if _, ok := result.syncPerEntity[types.EntityInfo]; !ok {
+		t.Errorf("info not synchronized during the monitors' retry delay: %v", result.syncPerEntity)
+	}
+
+	request := helper.s.forceSync[types.EntityMonitor]
+	if request.Type != types.SyncTypeForceCacheRefresh || !request.Deadline.Equal(helper.s.entityRetryAt[types.EntityMonitor]) {
+		t.Errorf("monitors request = %+v, want a cache refresh at their retry time %s", request, helper.s.entityRetryAt[types.EntityMonitor])
+	}
+
+	helper.AddTime(firstDelay)
+
+	if result := helper.runOnceWithResult(t); result.err == nil {
+		t.Fatal("runOnce succeeded, want the monitors' error")
+	}
+
+	if secondDelay := checkRetryDelay(t, helper, 15*time.Second*155/100); secondDelay <= firstDelay {
+		t.Errorf("second retry delay %s, want it longer than the first one %s", secondDelay, firstDelay)
+	}
+
+	helper.wrapperClientMock.monitorsErr = nil
+
+	helper.AddTime(time.Minute)
+
+	result = helper.runOnceWithResult(t)
+	if result.err != nil {
+		t.Fatal(result.err)
+	}
+
+	if result.syncPerEntity[types.EntityMonitor] != types.SyncTypeForceCacheRefresh {
+		t.Errorf("monitors synchronized with %s, want %s", result.syncPerEntity[types.EntityMonitor], types.SyncTypeForceCacheRefresh)
+	}
+
+	if retryAt, ok := helper.s.entityRetryAt[types.EntityMonitor]; ok {
+		t.Errorf("monitors retry time %s kept after their success", retryAt)
+	}
+}
+
+// checkRetryDelay checks the monitors' retry delay is want, give or take its jitter and rounding, and returns it.
+func checkRetryDelay(t *testing.T, helper *syncTestHelper, want time.Duration) time.Duration {
+	t.Helper()
+
+	retryDelay := helper.s.entityRetryAt[types.EntityMonitor].Sub(helper.Now())
+	if retryDelay < want*8/10 || retryDelay > want*12/10 {
+		t.Errorf("monitors retry delay = %s, want about %s", retryDelay, want)
+	}
+
+	return retryDelay
+}
+
+// TestHandleExecutionResult checks only the authentication errors disable the whole connector:
+// for the other errors, each failed entity waits for its own retry delay.
+func TestHandleExecutionResult(t *testing.T) {
+	authErr := fmt.Errorf("metric: %w", &bleemeo.AuthError{APIError: &bleemeo.APIError{StatusCode: 401}})
+
+	tests := []struct {
+		name string
+		// synchronizedEvery is how often an execution also synchronizes an entity, zero for never.
+		synchronizedEvery time.Duration
+		// withoutAPI is whether that entity succeeds without calling the API, like SNMP without
+		// targets.
+		withoutAPI        bool
+		errSync           error
+		wantDisableReason bleemeoTypes.DisableReason
+		// wantDisabledFor is the least the connector stays disabled after the last execution.
+		wantDisabledFor time.Duration
+	}{
+		{
+			name:              "an entity failing, the others working",
+			synchronizedEvery: time.Hour,
+			errSync:           errEntityFailed,
+		},
+		{
+			name:    "every entity failing",
+			errSync: errEntityFailed,
+		},
+		{
+			// The entities with nothing to do succeed without calling the API: the delay keeps
+			// growing, up to 5 days.
+			name:              "authentication error",
+			synchronizedEvery: 15 * time.Minute,
+			withoutAPI:        true,
+			errSync:           authErr,
+			wantDisableReason: bleemeoTypes.DisableAuthenticationError,
+			wantDisabledFor:   24 * time.Hour,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			helper := newHelper(t)
+			defer helper.Close()
+
+			helper.preregisterAgent(t)
+			helper.initSynchronizer(t)
+
+			start := helper.Now()
+
+			for helper.Now().Sub(start) < 37*time.Hour {
+				execution := &Execution{
+					synchronizer:                     helper.s,
+					initialAuthenticatedSuccessCount: helper.s.authenticatedSuccessCounter.Load(),
+					entities:                         []EntityExecution{{syncType: types.SyncTypeNormal, err: tt.errSync}},
+				}
+
+				if tt.synchronizedEvery != 0 && helper.Now().Sub(start)%tt.synchronizedEvery == 0 {
+					execution.entities = append(execution.entities, EntityExecution{syncType: types.SyncTypeNormal, synced: true})
+
+					if !tt.withoutAPI {
+						helper.s.authenticatedSuccessCounter.Add(1)
+					}
+				}
+
+				helper.s.handleExecutionResult(execution, tt.errSync)
+
+				if until, reason := helper.s.getDisabledUntil(); tt.wantDisableReason == bleemeoTypes.NotDisabled && until.After(helper.Now()) {
+					t.Fatalf("connector disabled until %s (%s) after %s, want it enabled", until, reason, helper.Now().Sub(start))
+				}
+
+				helper.AddTime(15 * time.Minute)
+			}
+
+			until, reason := helper.s.getDisabledUntil()
+			if reason != tt.wantDisableReason {
+				t.Errorf("connector disabled for %s, want %s", reason, tt.wantDisableReason)
+			}
+
+			// The clock moved by 15 minutes after the last execution.
+			if disabledFor := until.Sub(helper.Now().Add(-15 * time.Minute)); tt.wantDisabledFor != 0 && disabledFor < tt.wantDisabledFor {
+				t.Errorf("connector disabled for %s after the last execution, want at least %s", disabledFor, tt.wantDisabledFor)
+			}
+		})
+	}
+}
+
+// TestAuthBrokenFlag checks only an authenticated request the API answered resets the
+// authentication errors and clears the flag of broken credentials: an execution that doesn't
+// call the API, like one with nothing to synchronize, doesn't.
+func TestAuthBrokenFlag(t *testing.T) {
+	authErr := fmt.Errorf("metric: %w", &bleemeo.AuthError{APIError: &bleemeo.APIError{StatusCode: 401}})
+
+	newExecution := func(helper *syncTestHelper, err error, calledAPI bool) *Execution {
+		execution := &Execution{
+			synchronizer:                     helper.s,
+			initialAuthenticatedSuccessCount: helper.s.authenticatedSuccessCounter.Load(),
+		}
+
+		if err != nil {
+			execution.entities = []EntityExecution{{syncType: types.SyncTypeNormal, err: err}}
+		}
+
+		if calledAPI {
+			helper.s.authenticatedSuccessCounter.Add(1)
+		}
+
+		return execution
+	}
+
+	t.Run("authentication errors between executions without API call", func(t *testing.T) {
+		helper := newHelper(t)
+		defer helper.Close()
+
+		helper.preregisterAgent(t)
+		helper.initSynchronizer(t)
+
+		start := helper.Now()
+
+		for helper.Now().Sub(start) < 3*time.Hour {
+			helper.s.handleExecutionResult(newExecution(helper, authErr, false), authErr)
+			helper.AddTime(time.Minute)
+			helper.s.handleExecutionResult(newExecution(helper, nil, false), nil)
+			helper.AddTime(14 * time.Minute)
+		}
+
+		if !stateHasValue(agentAuthBrokenCacheKey, helper.state) {
+			t.Error("credentials not marked broken after 3 hours of authentication errors")
+		}
+
+		if _, reason := helper.s.getDisabledUntil(); reason != bleemeoTypes.DisableAuthenticationError {
+			t.Errorf("connector disabled for %s, want %s", reason, bleemeoTypes.DisableAuthenticationError)
+		}
+	})
+
+	for _, tt := range []struct {
+		name      string
+		calledAPI bool
+		wantFlag  bool
+	}{
+		{name: "flag cleared by an authenticated success", calledAPI: true, wantFlag: false},
+		{name: "flag kept by an execution without API call", calledAPI: false, wantFlag: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			helper := newHelper(t)
+			defer helper.Close()
+
+			helper.preregisterAgent(t)
+			helper.initSynchronizer(t)
+
+			_ = helper.state.Set(agentAuthBrokenCacheKey, helper.Now().Add(-3*time.Hour).Format(time.RFC3339))
+
+			helper.s.handleExecutionResult(newExecution(helper, authErr, false), authErr)
+			helper.s.handleExecutionResult(newExecution(helper, nil, tt.calledAPI), nil)
+
+			if got := stateHasValue(agentAuthBrokenCacheKey, helper.state); got != tt.wantFlag {
+				t.Errorf("credentials marked broken = %v, want %v", got, tt.wantFlag)
+			}
+
+			if wantErrors := map[bool]int{true: 0, false: 1}[tt.calledAPI]; helper.s.successiveAuthErrors != wantErrors {
+				t.Errorf("successive authentication errors = %d, want %d", helper.s.successiveAuthErrors, wantErrors)
+			}
+		})
+	}
+}
+
+// TestLongStandingEntityFailure checks an entity failing for more than 36 hours, even before a
+// restart, waits up to an hour between its attempts, instead of 15 minutes, and that a success
+// resets it.
+func TestLongStandingEntityFailure(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		failedFor time.Duration
+		restarted bool
+		wantDelay time.Duration
+	}{
+		{name: "failing for 35 hours", failedFor: 35 * time.Hour, wantDelay: 15 * time.Minute},
+		{name: "failing for 37 hours", failedFor: 37 * time.Hour, wantDelay: time.Hour},
+		{name: "failing for 37 hours before a restart", failedFor: 37 * time.Hour, restarted: true, wantDelay: time.Hour},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			helper := newFullSyncHelper(t)
+			defer helper.Close()
+
+			helper.wrapperClientMock.monitorsErr = errMonitorsUnavailable
+			firstFailureAt := helper.Now().Add(-tt.failedFor)
+
+			if tt.restarted {
+				_ = helper.state.Set(entityFirstFailureCacheKey, map[types.EntityName]time.Time{types.EntityMonitor: firstFailureAt})
+
+				helper.initSynchronizer(t)
+			}
+
+			helper.s.l.Lock()
+			// Enough failures in a row to reach the longest delay.
+			helper.s.entityFailures[types.EntityMonitor] = 50
+
+			if !tt.restarted {
+				helper.s.entityFirstFailureAt[types.EntityMonitor] = firstFailureAt
+			}
+			helper.s.l.Unlock()
+
+			if result := helper.runOnceWithResult(t); result.err == nil {
+				t.Fatal("runOnce succeeded, want the monitors' error")
+			}
+
+			checkRetryDelay(t, helper, tt.wantDelay)
+
+			helper.wrapperClientMock.monitorsErr = nil
+
+			helper.AddTime(tt.wantDelay * 2)
+
+			if result := helper.runOnceWithResult(t); result.err != nil {
+				t.Fatal(result.err)
+			}
+
+			if firstFailureAt, ok := helper.s.entityFirstFailureAt[types.EntityMonitor]; ok {
+				t.Errorf("monitors first failure at %s kept after their success", firstFailureAt)
+			}
+
+			if stateHasValue(entityFirstFailureCacheKey, helper.state) {
+				t.Error("first failures kept in the state after the monitors' success")
+			}
+		})
+	}
+}

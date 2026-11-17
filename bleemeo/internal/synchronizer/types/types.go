@@ -171,13 +171,6 @@ type EntitySynchronizer interface {
 	PrepareExecution(ctx context.Context, execution SynchronizationExecution) (EntitySynchronizerExecution, error)
 }
 
-// NeedSynchronizationWhileSkipped is implemented by the entity synchronizers that may need a
-// synchronization while they are skipped, in maintenance or suspended mode. The entity stays
-// skipped: the synchronization is requested again until an execution where it can run.
-type NeedSynchronizationWhileSkipped interface {
-	NeedSynchronizationWhileSkipped(ctx context.Context, execution SynchronizationExecution) bool
-}
-
 // DiagnosticArchiver is implemented by the entity synchronizers that add their state to the
 // diagnostic archive. It may be called from another goroutine than the synchronization.
 type DiagnosticArchiver interface {
@@ -242,8 +235,13 @@ type SynchronizationExecution interface {
 	RequestUpdateThresholds()
 	RequestNotifyLabelsUpdate()
 	Option() Option
-	// LastSuccessfulSync returns the time the last synchronization started at and completed without error on all entities.
-	LastSuccessfulSync() time.Time
+	// LastSuccessfulSync returns when the execution which last synchronized the entity successfully
+	// started.
+	LastSuccessfulSync(entityName EntityName) time.Time
+	// ConsecutiveFailures returns how many executions in a row failed to synchronize the entity,
+	// before this one. A success resets it. The executions where the entity was skipped, or not
+	// run because the connector was disabled, don't count.
+	ConsecutiveFailures(entityName EntityName) int
 	// StartedAt returns the time this synchronization started at.
 	StartedAt() time.Time
 	GlobalState() SynchronizedGlobalState
@@ -354,7 +352,6 @@ type VSphereClient interface {
 type SynchronizedGlobalState interface {
 	IsMaintenance() bool
 	DelayedContainers() (delayedByID map[string]time.Time, minDelayed time.Time)
-	SuccessiveErrors() int
 	UpdateDelayedContainers(localContainers []facts.Container)
 	// Test if API had or not some feature. The default until a call to SetAPIHasFeature() is to assume
 	// feature is NOT available.

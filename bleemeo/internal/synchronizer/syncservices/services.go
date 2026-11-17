@@ -81,7 +81,7 @@ func (s *syncServicesExecution) NeedSynchronization(_ context.Context) (bool, er
 	_, lastDiscovery := s.execution.Option().Discovery.GetLatestDiscovery()
 	_, minDelayed := s.execution.GlobalState().DelayedContainers()
 
-	if s.execution.LastSuccessfulSync().Before(lastDiscovery) || (!minDelayed.IsZero() && s.execution.StartedAt().After(minDelayed)) {
+	if s.execution.LastSuccessfulSync(types.EntityService).Before(lastDiscovery) || (!minDelayed.IsZero() && s.execution.StartedAt().After(minDelayed)) {
 		// Metrics registration may need services to be synced, trigger metrics synchronization to be sure any
 		// possible blocked metrics get registered after service are registered
 		s.execution.RequestSynchronization(types.EntityMetric, false)
@@ -93,8 +93,9 @@ func (s *syncServicesExecution) NeedSynchronization(_ context.Context) (bool, er
 }
 
 func (s *syncServicesExecution) RefreshCache(ctx context.Context, syncType types.SyncType) error {
-	if s.execution.GlobalState().SuccessiveErrors() == 3 {
-		// After 3 error, try to force a full synchronization to see if it solve the issue.
+	if s.execution.ConsecutiveFailures(types.EntityService) == 3 {
+		// After 3 failures of the services in a row, try a cache refresh to see if it solves
+		// the issue.
 		syncType = types.SyncTypeForceCacheRefresh
 	}
 

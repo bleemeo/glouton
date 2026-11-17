@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -65,9 +66,16 @@ import (
 )
 
 const (
-	agentAuthBrokenCacheKey    = "AgentAuthBroken"
+	agentAuthBrokenCacheKey = "AgentAuthBroken"
+	// agentDysfunctionalCacheKey is the flag older versions set on an agent failing for 36 hours,
+	// to disable its connector up to an hour. Each entity now waits for its own retry delay, see
+	// Execution.recordFailureLocked: Run deletes the flag.
 	agentDysfunctionalCacheKey = "AgentDysfunctional"
-	refreshTokenCacheKey       = "RefreshToken"
+	// entityFirstFailureCacheKey keeps entityFirstFailureAt across restarts.
+	entityFirstFailureCacheKey = "EntityFirstFailure"
+	// registrationFirstFailureCacheKey keeps firstRegistrationFailureAt across restarts.
+	registrationFirstFailureCacheKey = "RegistrationFirstFailure"
+	refreshTokenCacheKey             = "RefreshToken"
 
 	// duplicateCheckInterval is the delay between two duplicated agent checks, jittered.
 	// The check lists the agent facts registered on the API, which used to happen on every
@@ -108,6 +116,9 @@ type Synchronizer struct {
 	metrics     *syncmetrics.SyncMetrics
 
 	requestCounter atomic.Uint32
+	// authenticatedSuccessCounter counts the authenticated requests the API answered without
+	// error: see Execution.calledAPISuccessfully.
+	authenticatedSuccessCounter atomic.Uint32
 	// realClient and agentID are only written by the synchronization loop
 	// goroutine, while holding l. The synchronization loop may read them
 	// without the lock, any other goroutine must hold l to read them.
@@ -123,9 +134,13 @@ type Synchronizer struct {
 	lastSuccessfulSync        time.Time
 	lastSync                  time.Time
 	successiveErrors          int
-	firstErrorAt              time.Time
-	maintenanceMode           bool
-	suspendedMode             bool
+	// successiveAuthErrors, firstAuthErrorAt and firstRegistrationFailureAt are only used by the
+	// synchronization loop. firstRegistrationFailureAt is kept in the state.
+	successiveAuthErrors       int
+	firstAuthErrorAt           time.Time
+	firstRegistrationFailureAt time.Time
+	maintenanceMode            bool
+	suspendedMode              bool
 	// See the comment on realClient about the locking of agentID.
 	agentID          string
 	delayedContainer map[string]time.Time
@@ -136,6 +151,16 @@ type Synchronizer struct {
 	lastDuplicateCheck time.Time
 	nextDuplicateCheck time.Time
 	forceSync          map[types.EntityName]types.SyncRequest
+	// entityLastSync is, per entity, when the execution which last synchronized it successfully
+	// started, and entityFailures the number of executions in a row which failed to synchronize
+	// it. See Execution.LastSuccessfulSync and Execution.ConsecutiveFailures.
+	entityLastSync map[types.EntityName]time.Time
+	entityFailures map[types.EntityName]int
+	// entityRetryAt is, per failed entity, when it can be synchronized again, and
+	// entityFirstFailureAt when the failures in a row started, kept in the state: see
+	// Execution.recordResults.
+	entityRetryAt        map[types.EntityName]time.Time
+	entityFirstFailureAt map[types.EntityName]time.Time
 }
 
 // New return a new Synchronizer.
@@ -167,9 +192,20 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		option: option,
 		now:    now,
 
-		forceSync:     make(map[types.EntityName]types.SyncRequest),
-		nextFullSync:  nextFullSync,
-		fullSyncCount: fullSyncCount,
+		forceSync:      make(map[types.EntityName]types.SyncRequest),
+		entityLastSync: make(map[types.EntityName]time.Time),
+		entityFailures: make(map[types.EntityName]int),
+		entityRetryAt:  make(map[types.EntityName]time.Time),
+		nextFullSync:   nextFullSync,
+		fullSyncCount:  fullSyncCount,
+
+		entityFirstFailureAt: make(map[types.EntityName]time.Time),
+	}
+
+	s.loadEntityFirstFailures()
+
+	if option.State != nil {
+		s.firstRegistrationFailureAt = stateGetTime(registrationFirstFailureCacheKey, option.State)
 	}
 
 	s.info = syncinfo.New(&s.requestCounter, s.now)
@@ -257,7 +293,11 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		LastSuccessfulSync        time.Time
 		LastSync                  time.Time
 		SuccessiveErrors          int
-		FirstErrorAt              time.Time
+		EntityLastSync            map[types.EntityName]time.Time
+		EntityFailures            map[types.EntityName]int
+		EntityRetryAt             map[types.EntityName]time.Time
+		EntityFirstFailureAt      map[types.EntityName]time.Time
+		AuthenticatedSuccesses    uint32
 		MaintenanceMode           bool
 		AgentID                   string
 		DisabledUntil             time.Time
@@ -268,7 +308,7 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		DelayedContainer          map[string]time.Time
 		APIFeatures               map[string]bool
 		StateMarkerAuthBroken     time.Time
-		StateMarkerDysfunctional  time.Time
+		RegistrationFirstFailure  time.Time
 	}{
 		NextFullSync:              s.nextFullSync,
 		HeartBeat:                 s.syncHeartbeat,
@@ -278,7 +318,11 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		LastSuccessfulSync:        s.lastSuccessfulSync,
 		LastSync:                  s.lastSync,
 		SuccessiveErrors:          s.successiveErrors,
-		FirstErrorAt:              s.firstErrorAt,
+		EntityLastSync:            maps.Clone(s.entityLastSync),
+		EntityFailures:            maps.Clone(s.entityFailures),
+		EntityRetryAt:             maps.Clone(s.entityRetryAt),
+		EntityFirstFailureAt:      maps.Clone(s.entityFirstFailureAt),
+		AuthenticatedSuccesses:    s.authenticatedSuccessCounter.Load(),
 		MaintenanceMode:           s.maintenanceMode,
 		AgentID:                   s.agentID,
 		DisabledUntil:             s.disabledUntil,
@@ -289,7 +333,7 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		DelayedContainer:          delayedContainer,
 		APIFeatures:               make(map[string]bool, len(s.hasFeature)),
 		StateMarkerAuthBroken:     stateGetTime(agentAuthBrokenCacheKey, s.option.State),
-		StateMarkerDysfunctional:  stateGetTime(agentDysfunctionalCacheKey, s.option.State),
+		RegistrationFirstFailure:  stateGetTime(registrationFirstFailureCacheKey, s.option.State),
 	}
 
 	for k, v := range s.hasFeature {
@@ -333,17 +377,21 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err)
 	}
 
+	err = s.option.State.Delete(agentDysfunctionalCacheKey)
+	if err != nil {
+		logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
+	}
+
 	s.syncInfoBeforeFirstExecution(ctx)
 
 	s.option.SetInitialized()
 
 	s.l.Lock()
 	s.successiveErrors = 0
-	s.firstErrorAt = time.Time{}
 	s.l.Unlock()
 
-	successiveAuthErrors := 0
-	firstAuthErrorAt := time.Time{}
+	s.successiveAuthErrors = 0
+	s.firstAuthErrorAt = time.Time{}
 
 	// We schedule a metric synchronization for in a few minutes to permit
 	// the deactivation of metrics whose item has disappeared between
@@ -368,126 +416,8 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		}
 
 		execution, errSync := s.runOnce(ctx, firstSync)
-		if errSync != nil {
-			s.l.Lock()
-			s.successiveErrors++
 
-			if s.firstErrorAt.IsZero() {
-				s.firstErrorAt = s.now()
-			} else if s.now().Sub(s.firstErrorAt) > 36*time.Hour {
-				if !stateHasValue(agentDysfunctionalCacheKey, s.option.State) {
-					err := s.option.State.Set(agentDysfunctionalCacheKey, s.firstErrorAt.Format(time.RFC3339))
-					if err != nil {
-						logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
-					}
-				}
-			}
-
-			s.l.Unlock()
-
-			if IsAuthenticationError(errSync) {
-				successiveAuthErrors++
-
-				if firstAuthErrorAt.IsZero() {
-					firstAuthErrorAt = s.now()
-				} else if s.now().Sub(firstAuthErrorAt) > 2*time.Hour {
-					if !stateHasValue(agentAuthBrokenCacheKey, s.option.State) {
-						err := s.option.State.Set(agentAuthBrokenCacheKey, firstAuthErrorAt.Format(time.RFC3339))
-						if err != nil {
-							logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
-						}
-					}
-				}
-			} else {
-				firstAuthErrorAt = time.Time{}
-
-				err := s.option.State.Delete(agentAuthBrokenCacheKey)
-				if err != nil {
-					logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
-				}
-			}
-
-			if IsThrottleError(errSync) {
-				deadline := s.throttleDeadline(execution).Add(delay.JitterDelay(15*time.Second, 0.3))
-				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
-			} else {
-				s.l.Lock()
-				successiveErrors := s.successiveErrors
-				s.l.Unlock()
-
-				switch {
-				case stateHasValue(agentAuthBrokenCacheKey, s.option.State):
-					disableDelay := delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
-					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableAuthenticationError)
-					// Ask MQTT to disconnect, but don't block reconnection.
-					// They will be blocked anyway because it's a auth error (so we don't have oauth token required to connect to MQTT)
-					s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
-				case stateHasValue(agentDysfunctionalCacheKey, s.option.State):
-					disableDelay := delay.Exponential(1*time.Minute, 1.55, successiveErrors, time.Hour)
-					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableLongStandingError)
-				default:
-					disableDelay := delay.JitterDelay(
-						delay.Exponential(15*time.Second, 1.55, successiveErrors, 15*time.Minute),
-						0.1,
-					)
-
-					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
-				}
-
-				if IsAuthenticationError(errSync) && successiveAuthErrors == 1 {
-					// we disable only to trigger a reconnection on MQTT
-					s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
-				}
-			}
-
-			switch {
-			case IsAuthenticationError(errSync) && s.agentID != "":
-				fqdnMessage := ""
-
-				fqdn := s.option.Cache.FactsByKey()[s.agentID][syncfacts.FactFQDN].Value
-				if fqdn != "" {
-					fqdnMessage = " with fqdn " + fqdn
-				}
-
-				logger.Printf(
-					"Unable to synchronize with Bleemeo: Unable to login with credentials from state.json. Using agent ID %s%s. Was this server deleted on Bleemeo Cloud platform ?",
-					s.agentID,
-					fqdnMessage,
-				)
-			case IsAuthenticationError(errSync):
-				registrationKey := []rune(s.option.Config.Bleemeo.RegistrationKey)
-				for i := range registrationKey {
-					if i >= 6 && i < len(registrationKey)-4 {
-						registrationKey[i] = '*'
-					}
-				}
-
-				logger.Printf(
-					"Wrong credential for registration. Configuration contains account_id %s and registration_key %s",
-					s.option.Config.Bleemeo.AccountID,
-					string(registrationKey),
-				)
-			default:
-				if s.successiveErrors%5 == 1 {
-					logger.Printf("Unable to synchronize with Bleemeo: %v", errSync)
-				} else {
-					logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", errSync)
-				}
-			}
-		} else {
-			s.l.Lock()
-			s.successiveErrors = 0
-			s.firstErrorAt = time.Time{}
-			s.l.Unlock()
-
-			successiveAuthErrors = 0
-			firstAuthErrorAt = time.Time{}
-
-			err = s.option.State.Delete(agentDysfunctionalCacheKey)
-			if err != nil {
-				logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
-			}
-		}
+		s.handleExecutionResult(execution, errSync)
 
 		minimalDelay = delay.JitterDelay(15*time.Second, 0.05)
 
@@ -497,6 +427,152 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	return nil //nolint:nilerr
+}
+
+// handleExecutionResult tracks the errors of the synchronization loop's executions, and disables
+// the connector for the errors that concern the whole agent.
+func (s *Synchronizer) handleExecutionResult(execution *Execution, errSync error) {
+	// An authenticated request the API answered shows the agent works with it, and its
+	// credentials too: the failing entities only wait for their own retry delay, see
+	// Execution.recordResults. An execution that doesn't call the API, like SNMP without targets
+	// or nothing to synchronize, shows nothing.
+	if execution != nil && execution.calledAPISuccessfully() {
+		s.l.Lock()
+		s.successiveErrors = 0
+		s.l.Unlock()
+
+		s.successiveAuthErrors = 0
+		s.firstAuthErrorAt = time.Time{}
+
+		err := s.option.State.Delete(agentAuthBrokenCacheKey)
+		if err != nil {
+			logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
+		}
+	}
+
+	// runOnce returns no execution only when the agent failed to register.
+	registrationFailed := execution == nil && errSync != nil
+
+	// The start of the registration failures is kept in the state, so that an agent failing to
+	// register for longStandingFailure before a restart still waits up to
+	// longStandingMaxRetryDelay.
+	switch {
+	case !registrationFailed && !s.firstRegistrationFailureAt.IsZero():
+		s.firstRegistrationFailureAt = time.Time{}
+
+		err := s.option.State.Delete(registrationFirstFailureCacheKey)
+		if err != nil {
+			logger.V(1).Printf("Failed to delete the registration's first failure from state cache: %v", err)
+		}
+	case registrationFailed && s.firstRegistrationFailureAt.IsZero():
+		s.firstRegistrationFailureAt = s.now()
+
+		err := s.option.State.Set(registrationFirstFailureCacheKey, s.firstRegistrationFailureAt)
+		if err != nil {
+			logger.V(1).Printf("Failed to write the registration's first failure to state cache: %v", err)
+		}
+	}
+
+	if errSync != nil {
+		s.l.Lock()
+		s.successiveErrors++
+		s.l.Unlock()
+
+		if IsAuthenticationError(errSync) {
+			s.successiveAuthErrors++
+
+			if s.firstAuthErrorAt.IsZero() {
+				s.firstAuthErrorAt = s.now()
+			} else if s.now().Sub(s.firstAuthErrorAt) > 2*time.Hour {
+				if !stateHasValue(agentAuthBrokenCacheKey, s.option.State) {
+					err := s.option.State.Set(agentAuthBrokenCacheKey, s.firstAuthErrorAt.Format(time.RFC3339))
+					if err != nil {
+						logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
+					}
+				}
+			}
+		} else {
+			s.firstAuthErrorAt = time.Time{}
+
+			err := s.option.State.Delete(agentAuthBrokenCacheKey)
+			if err != nil {
+				logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
+			}
+		}
+
+		if IsThrottleError(errSync) {
+			deadline := s.throttleDeadline(execution).Add(delay.JitterDelay(15*time.Second, 0.3))
+			s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
+		} else {
+			s.l.Lock()
+			successiveErrors := s.successiveErrors
+			s.l.Unlock()
+
+			// Other errors don't disable the whole connector: each failed entity waits for its
+			// own retry delay, see Execution.recordResults.
+			switch {
+			case stateHasValue(agentAuthBrokenCacheKey, s.option.State):
+				disableDelay := delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
+				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableAuthenticationError)
+				// Ask MQTT to disconnect, but don't block reconnection.
+				// They will be blocked anyway because it's a auth error (so we don't have oauth token required to connect to MQTT)
+				s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
+			case IsAuthenticationError(errSync):
+				disableDelay := delay.JitterDelay(
+					delay.Exponential(15*time.Second, 1.55, successiveErrors, 15*time.Minute),
+					0.1,
+				)
+
+				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
+			case registrationFailed:
+				// No entity ran, so none waits for its retry delay: the registration waits like
+				// a failed entity.
+				disableDelay := failureRetryDelay(successiveErrors, s.now().Sub(s.firstRegistrationFailureAt))
+
+				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
+			}
+
+			if IsAuthenticationError(errSync) && s.successiveAuthErrors == 1 {
+				// we disable only to trigger a reconnection on MQTT
+				s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
+			}
+		}
+
+		switch {
+		case IsAuthenticationError(errSync) && s.agentID != "":
+			fqdnMessage := ""
+
+			fqdn := s.option.Cache.FactsByKey()[s.agentID][syncfacts.FactFQDN].Value
+			if fqdn != "" {
+				fqdnMessage = " with fqdn " + fqdn
+			}
+
+			logger.Printf(
+				"Unable to synchronize with Bleemeo: Unable to login with credentials from state.json. Using agent ID %s%s. Was this server deleted on Bleemeo Cloud platform ?",
+				s.agentID,
+				fqdnMessage,
+			)
+		case IsAuthenticationError(errSync):
+			registrationKey := []rune(s.option.Config.Bleemeo.RegistrationKey)
+			for i := range registrationKey {
+				if i >= 6 && i < len(registrationKey)-4 {
+					registrationKey[i] = '*'
+				}
+			}
+
+			logger.Printf(
+				"Wrong credential for registration. Configuration contains account_id %s and registration_key %s",
+				s.option.Config.Bleemeo.AccountID,
+				string(registrationKey),
+			)
+		default:
+			if s.successiveErrors%5 == 1 {
+				logger.Printf("Unable to synchronize with Bleemeo: %v", errSync)
+			} else {
+				logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", errSync)
+			}
+		}
+	}
 }
 
 // scheduleMetricSync requests a synchronization of the metrics after the given delay, in a new goroutine.
@@ -814,13 +890,6 @@ func (s *Synchronizer) SetAPIHasFeature(feature types.APIFeature, has bool) {
 	s.hasFeature[feature] = has
 }
 
-func (s *Synchronizer) SuccessiveErrors() int {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	return s.successiveErrors
-}
-
 // ScheduleDiagnosticUpload stores the given diagnostic until the next synchronization,
 // where it will be uploaded to the API.
 // If another call to this method is made before the next synchronization,
@@ -1048,6 +1117,8 @@ func (s *Synchronizer) buildClient() (*bleemeo.Client, error) {
 		UserAgentHeader: version.UserAgent(),
 		RequestCounter:  &s.requestCounter,
 		EnableLogger:    true,
+
+		AuthenticatedSuccessCounter: &s.authenticatedSuccessCounter,
 	}
 	cl := &http.Client{
 		Transport: gloutonTypes.NewHTTPTransport(tlsConfig, transportOpts),
@@ -1120,6 +1191,8 @@ func (s *Synchronizer) throttleDeadline(execution *Execution) time.Time {
 	return s.getClient().ThrottleDeadline()
 }
 
+// runOnce registers the agent if needed and runs an execution. It returns no execution only when
+// the registration failed.
 func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execution, error) {
 	var wasCreation bool
 
@@ -1156,7 +1229,11 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 	execution := s.newExecution(onlyEssential, wasCreation)
 
 	err := execution.run(ctx)
-	if execution.forceCacheRefreshForAll() && err == nil {
+	if execution.forceCacheRefreshForAll() && ctx.Err() == nil {
+		// The full synchronization is done even when some entities failed: only they are
+		// refreshed again, after their retry delay (see Execution.recordResults). Redoing the full
+		// synchronization would refresh every entity again, with all their API calls, until the
+		// failing ones succeed.
 		s.option.Cache.Save()
 
 		s.fullSyncCount++
@@ -1448,6 +1525,46 @@ func (s *Synchronizer) requestLaterSynchronizationLocked(entityName types.Entity
 	}
 
 	s.forceSync[entityName] = request
+}
+
+// loadEntityFirstFailures reads from the state when the failing entities started failing, so
+// that an entity failing for longStandingFailure before a restart still waits up to
+// longStandingMaxRetryDelay.
+func (s *Synchronizer) loadEntityFirstFailures() {
+	if s.option.State == nil {
+		return
+	}
+
+	var firstFailures map[types.EntityName]time.Time
+
+	err := s.option.State.Get(entityFirstFailureCacheKey, &firstFailures)
+	if err != nil {
+		logger.V(1).Printf("Failed to read the entities' first failures from state cache: %v", err)
+
+		return
+	}
+
+	maps.Copy(s.entityFirstFailureAt, firstFailures)
+}
+
+// saveEntityFirstFailuresLocked writes entityFirstFailureAt to the state, see loadEntityFirstFailures.
+// Caller must hold the lock s.l.
+func (s *Synchronizer) saveEntityFirstFailuresLocked() {
+	if s.option.State == nil {
+		return
+	}
+
+	var err error
+
+	if len(s.entityFirstFailureAt) == 0 {
+		err = s.option.State.Delete(entityFirstFailureCacheKey)
+	} else {
+		err = s.option.State.Set(entityFirstFailureCacheKey, maps.Clone(s.entityFirstFailureAt))
+	}
+
+	if err != nil {
+		logger.V(1).Printf("Failed to write the entities' first failures to state cache: %v", err)
+	}
 }
 
 // stateHasValue returns whether the given state has a value for the given key.

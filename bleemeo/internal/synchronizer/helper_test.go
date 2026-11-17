@@ -333,7 +333,8 @@ func (helper *syncTestHelper) runOnceNoReset(t *testing.T) runOnceResult {
 	return result
 }
 
-// runUntilNoError run runOnceWithResult until it no longer returns error (or maxRun is reached).
+// runUntilNoError run runOnceWithResult until it no longer returns error and no entity waits for
+// its retry delay (or maxRun is reached).
 // Each additional run, clock advance of timeStep.
 // runOnceResult contains merges from all runs.
 func (helper *syncTestHelper) runUntilNoError(t *testing.T, maxRun int, timeStep time.Duration) runOnceResult {
@@ -348,7 +349,9 @@ func (helper *syncTestHelper) runUntilNoError(t *testing.T, maxRun int, timeStep
 		result = mergeResult(result, tmp)
 
 		result.err = tmp.err
-		if result.err == nil {
+
+		// An entity waiting for its retry delay is left out without error: it isn't done yet.
+		if result.err == nil && len(helper.s.entityRetryAt) == 0 {
 			return result
 		}
 

@@ -66,14 +66,6 @@ func (s *SyncContainers) EnabledInSuspendedMode() bool {
 	return false
 }
 
-// NeedSynchronizationWhileSkipped returns whether the containers need a synchronization, like
-// NeedSynchronization, while they are skipped in maintenance or suspended mode. The discovery is
-// compared with the last successful synchronization, which keeps moving while they're skipped:
-// the synchronization must stay requested until they run.
-func (s *SyncContainers) NeedSynchronizationWhileSkipped(_ context.Context, execution types.SynchronizationExecution) bool {
-	return needSynchronization(execution)
-}
-
 func (s *SyncContainers) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
 	var agentID string
 
@@ -100,10 +92,10 @@ func (e *syncContainersExecution) NeedSynchronization(_ context.Context) (bool, 
 	return needSynchronization(e.execution), nil
 }
 
-// RefreshCache lists the containers from the API on a cache refresh, or after 3 errors in a row
-// to see if it solves the issue.
+// RefreshCache lists the containers from the API on a cache refresh, or after 3 failures of
+// the containers in a row to see if it solves the issue.
 func (e *syncContainersExecution) RefreshCache(ctx context.Context, syncType types.SyncType) error {
-	if syncType != types.SyncTypeForceCacheRefresh && e.execution.GlobalState().SuccessiveErrors() != 3 {
+	if syncType != types.SyncTypeForceCacheRefresh && e.execution.ConsecutiveFailures(types.EntityContainer) != 3 {
 		return nil
 	}
 
@@ -162,13 +154,13 @@ func (e *syncContainersExecution) SyncRemoteAndLocal(ctx context.Context, _ type
 func (e *syncContainersExecution) FinishExecution(_ context.Context) {
 }
 
-// needSynchronization returns whether a discovery happened since the last successful
-// synchronization, or a delayed container is due.
+// needSynchronization returns whether a discovery happened since the containers were last
+// synchronized successfully, or a delayed container is due.
 func needSynchronization(execution types.SynchronizationExecution) bool {
 	_, lastDiscovery := execution.Option().Discovery.GetLatestDiscovery()
 	_, minDelayed := execution.GlobalState().DelayedContainers()
 
-	if execution.LastSuccessfulSync().Before(lastDiscovery) {
+	if execution.LastSuccessfulSync(types.EntityContainer).Before(lastDiscovery) {
 		return true
 	}
 

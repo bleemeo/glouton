@@ -18,6 +18,7 @@ package synchronizer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -191,11 +192,24 @@ func (s *stateMock) SetBleemeoCredentials(agentUUID string, password string) err
 // Get returns an object.
 func (s *stateMock) Get(key string, result any) error {
 	val, ok := s.data[key]
-	if ok {
-		reflect.ValueOf(result).Elem().Set(reflect.ValueOf(val))
+	if !ok {
+		return nil
 	}
 
-	return nil
+	target := reflect.ValueOf(result).Elem()
+	if reflect.TypeOf(val).AssignableTo(target.Type()) {
+		target.Set(reflect.ValueOf(val))
+
+		return nil
+	}
+
+	// Like the real state, which stores JSON: e.g. a json.RawMessage reads any value.
+	encoded, err := json.Marshal(val)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(encoded, result)
 }
 
 func (s *stateMock) GetByPrefix(keyPrefix string, resultType any) (map[string]any, error) {
