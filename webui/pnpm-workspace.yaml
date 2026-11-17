@@ -6,3 +6,10 @@ overrides:
   # GHSA-gv7w-rqvm-qjhr (high) and GHSA-g7r4-m6w7-qqqr (low). Force
   # the patched line until vite bumps its own dependency.
   esbuild: ">=0.28.1"
+
+auditConfig:
+  ignoreGhsas:
+    # Issue on minimatch (only used during lint, `pnpm audit --prod` is
+    # clean). Fixed in 11.x but @typescript-eslint/typescript-estree 8.72
+    # still requires ^10.2.2. Drop once typescript-eslint >= 8.73.0 is in.
+    - GHSA-g3hv-75wg-m249
