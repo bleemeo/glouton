@@ -29,6 +29,7 @@ import (
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/confignet"
 	"go.opentelemetry.io/collector/config/configoptional"
+	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -87,7 +88,7 @@ func SetupOTLPNetworkListener(
 		receiverTypedCfg.Protocols.HTTP = configoptional.None[otlpreceiver.HTTPConfig]()
 	}
 
-	if err := receiverTypedCfg.Validate(); err != nil {
+	if err := confmap.Validate(receiverTypedCfg); err != nil {
 		return nil, fmt.Errorf("invalid OTLP receiver config: %w", err)
 	}
 
