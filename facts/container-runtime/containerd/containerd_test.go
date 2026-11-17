@@ -17,12 +17,16 @@
 package containerd
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -30,12 +34,16 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/facts/container-runtime/internal/testutil"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/archivewriter"
 
 	v1 "github.com/containerd/cgroups/v3/cgroup1/stats"
 	v2 "github.com/containerd/cgroups/v3/cgroup2/stats"
 	pbEvents "github.com/containerd/containerd/api/events"
+	"github.com/containerd/containerd/api/services/tasks/v1"
+	containerdTypes "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/protobuf"
 	"github.com/containerd/containerd/v2/client"
+	"github.com/containerd/containerd/v2/core/containers"
 	"github.com/containerd/containerd/v2/core/events"
 	"github.com/containerd/containerd/v2/pkg/namespaces"
 	"github.com/containerd/containerd/v2/pkg/oci"
@@ -1040,5 +1048,382 @@ func TestConvertToContainerObjectPrimaryAddressByTaskStatus(t *testing.T) {
 				t.Errorf("status %q: primaryAddress = %q, want %q", tc.status, obj.primaryAddress, tc.wantAddr)
 			}
 		})
+	}
+}
+
+// netDevHeader is the 2-line header of a real /proc/<pid>/net/dev.
+const netDevHeader = `Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+`
+
+// netDevLine formats a /proc/<pid>/net/dev line with the given received and sent bytes.
+func netDevLine(iface string, recvBytes, sentBytes uint64) string {
+	return fmt.Sprintf("%6s: %7d 10 0 0 0 0 0 0 %8d 20 0 0 0 0 0 0\n", iface, recvBytes, sentBytes)
+}
+
+// fakeProc is a fake procfs mounted under a fake host root.
+type fakeProc struct {
+	hostRoot string
+}
+
+func newFakeProc(t *testing.T) fakeProc {
+	t.Helper()
+
+	p := fakeProc{hostRoot: t.TempDir()}
+
+	// The host's init, in the host network namespace: only its file identity matters.
+	p.writeNetDev(t, 1)
+
+	return p
+}
+
+func (p fakeProc) pidDir(pid int) string {
+	return filepath.Join(p.hostRoot, "proc", strconv.Itoa(pid))
+}
+
+// writeNetDev writes the net/dev of pid, made of the header followed by the given lines.
+func (p fakeProc) writeNetDev(t *testing.T, pid int, lines ...string) {
+	t.Helper()
+
+	netDev := netDevHeader + strings.Join(lines, "")
+
+	netDir := filepath.Join(p.pidDir(pid), "net")
+	if err := os.MkdirAll(netDir, 0o750); err != nil {
+		t.Fatal("Can't create fake procfs:", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(netDir, "dev"), []byte(netDev), 0o600); err != nil {
+		t.Fatal("Can't write fake net/dev:", err)
+	}
+}
+
+// addHostNetworkPID adds a process in the host's network namespace: it sees the very same procfs
+// "net" entries as the host's init, which a symlink reproduces here.
+func (p fakeProc) addHostNetworkPID(t *testing.T, pid int) {
+	t.Helper()
+
+	if err := os.MkdirAll(p.pidDir(pid), 0o750); err != nil {
+		t.Fatal("Can't create fake procfs:", err)
+	}
+
+	if err := os.Symlink(filepath.Join(p.pidDir(1), "net"), filepath.Join(p.pidDir(pid), "net")); err != nil {
+		t.Fatal("Can't create fake host network namespace:", err)
+	}
+}
+
+func TestIsRuntimeInterface(t *testing.T) {
+	cases := map[string]bool{
+		"eth0":     true,
+		"eth12":    true,
+		"net1":     true,
+		"lo":       false,
+		"docker0":  false,
+		"veth1a2b": false,
+		"br-1a2b":  false,
+		"tun0":     false,
+		"wg0":      false,
+		"tunl0":    false,
+		"eth":      false,
+		"ethx":     false,
+		"eth0.100": false,
+		"net":      false,
+		"network0": false,
+	}
+
+	for name, want := range cases {
+		if got := isRuntimeInterface(name); got != want {
+			t.Errorf("isRuntimeInterface(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+func TestNetTrafficFromProc(t *testing.T) {
+	const (
+		pid         = 4242
+		onlyLoPID   = 4343
+		missingPID  = 4444
+		dindPodPID  = 4545
+		multusPID   = 4646
+		bigCountPID = 4747
+	)
+
+	p := newFakeProc(t)
+
+	p.writeNetDev(t, pid, netDevLine("lo", 50, 50), netDevLine("eth0", 100, 200))
+	p.writeNetDev(t, onlyLoPID, netDevLine("lo", 50, 50))
+	// A docker:dind service: the same traffic crosses eth0, docker0 and the veth.
+	p.writeNetDev(t, dindPodPID, netDevLine("lo", 50, 50), netDevLine("eth0", 100, 200),
+		netDevLine("docker0", 100, 200), netDevLine("veth1a2b", 200, 100))
+	p.writeNetDev(t, multusPID, netDevLine("eth0", 100, 200), netDevLine("net1", 1000, 2000))
+	// A counter too wide for its column is glued to the colon.
+	p.writeNetDev(t, bigCountPID, "eth0:12345678901 10 0 0 0 0 0 0 300 20 0 0 0 0 0 0\n")
+
+	cases := []struct {
+		name string
+		pid  int
+		want netTraffic
+	}{
+		{name: "loopback excluded", pid: pid, want: netTraffic{recvBytes: 100, sentBytes: 200, found: true}},
+		{name: "only loopback", pid: onlyLoPID, want: netTraffic{}},
+		{name: "missing PID", pid: missingPID, want: netTraffic{}},
+		{name: "interfaces created inside the container excluded", pid: dindPodPID, want: netTraffic{recvBytes: 100, sentBytes: 200, found: true}},
+		{name: "multus interfaces summed", pid: multusPID, want: netTraffic{recvBytes: 1100, sentBytes: 2200, found: true}},
+		{name: "counter glued to the colon", pid: bigCountPID, want: netTraffic{recvBytes: 12345678901, sentBytes: 300, found: true}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := netTrafficFromProc(tc.pid, p.hostRoot); got != tc.want {
+				t.Errorf("netTrafficFromProc() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestNetNamespaceFromProc covers the cases where the network namespace can't be told, the host and
+// isolated ones being covered through convertToContainerObject.
+func TestNetNamespaceFromProc(t *testing.T) {
+	const (
+		pid        = 4242
+		missingPID = 6464
+	)
+
+	p := newFakeProc(t)
+	p.writeNetDev(t, pid, netDevLine("eth0", 100, 200))
+
+	if got := netNamespaceFromProc(missingPID, p.hostRoot); got != netNamespaceUnknown {
+		t.Errorf("netNamespaceFromProc() for a missing PID = %v, want %v", got, netNamespaceUnknown)
+	}
+
+	if got := netNamespaceFromProc(pid, t.TempDir()); got != netNamespaceUnknown {
+		t.Errorf("netNamespaceFromProc() with the host init not visible = %v, want %v", got, netNamespaceUnknown)
+	}
+}
+
+// TestConvertToContainerObjectHostNetNamespace guards against a regression where the containers of a
+// Kubernetes hostNetwork pod were taken as having a network namespace of their own: their OCI spec
+// doesn't omit the network namespace but joins the sandbox's one by path, which is the host's. They
+// reported the node's traffic as theirs, and got the node's address as containerd primary address
+// (under Kubernetes, the pod IP from the API takes precedence over it anyway).
+func TestConvertToContainerObjectHostNetNamespace(t *testing.T) {
+	const (
+		namespace      = "k8s.io"
+		pid            = 4242
+		hostNetworkPID = 5353
+	)
+
+	p := newFakeProc(t)
+	p.writeNetDev(t, pid, netDevLine("eth0", 100, 200))
+	p.addHostNetworkPID(t, hostNetworkPID)
+
+	// What the CRI plugin generates for every app container, hostNetwork pod or not.
+	criSpec := &oci.Spec{
+		Linux: &specs.Linux{
+			Namespaces: []specs.LinuxNamespace{{Type: specs.NetworkNamespace, Path: "/proc/1234/ns/net"}},
+		},
+	}
+	hostNetworkSpec := &oci.Spec{Linux: &specs.Linux{}}
+
+	cases := []struct {
+		name        string
+		spec        *oci.Spec
+		pid         uint32
+		status      client.ProcessStatus
+		wantNetNS   netNamespace
+		wantAddress string
+	}{
+		{name: "pod network", spec: criSpec, pid: pid, status: client.Running, wantNetNS: netNamespaceIsolated},
+		{name: "hostNetwork pod", spec: criSpec, pid: hostNetworkPID, status: client.Running, wantNetNS: netNamespaceHost, wantAddress: "127.0.0.1"},
+		{name: "no network namespace in spec", spec: hostNetworkSpec, pid: pid, status: client.Running, wantNetNS: netNamespaceHost, wantAddress: "127.0.0.1"},
+		{name: "stopped, PID may be recycled", spec: criSpec, pid: hostNetworkPID, status: client.Stopped, wantNetNS: netNamespaceUnknown},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctr := MockContainer{
+				namespace: namespace,
+				MockInfo:  ContainerOCISpec{Spec: tc.spec},
+				MockTask: MockTask{
+					MockID:     "task-1",
+					MockPID:    tc.pid,
+					MockStatus: client.Status{Status: tc.status},
+				},
+			}
+
+			ctx := namespaces.WithNamespace(t.Context(), namespace)
+
+			obj, err := convertToContainerObject(ctx, namespace, ctr, p.hostRoot)
+			if err != nil {
+				t.Fatal("convertToContainerObject failed:", err)
+			}
+
+			if obj.netNamespace != tc.wantNetNS {
+				t.Errorf("netNamespace = %v, want %v", obj.netNamespace, tc.wantNetNS)
+			}
+
+			if obj.primaryAddress != tc.wantAddress {
+				t.Errorf("primaryAddress = %q, want %q", obj.primaryAddress, tc.wantAddress)
+			}
+		})
+	}
+}
+
+// metricsClient is a MockClient whose Metrics returns the same cgroup v2 metrics for every task.
+type metricsClient struct {
+	*MockClient
+}
+
+func (metricsClient) Metrics(_ context.Context, filters []string) (*tasks.MetricsResponse, error) {
+	resp := &tasks.MetricsResponse{}
+
+	for _, filter := range filters {
+		resp.Metrics = append(resp.Metrics, &containerdTypes.Metric{
+			ID:   strings.TrimPrefix(filter, "id=="),
+			Data: mustMarshalAny(&v2.Metrics{Memory: &v2.MemoryStat{Usage: 1000}}),
+		})
+	}
+
+	return resp, nil
+}
+
+// TestContainerdMetricsNetwork checks that Metrics reports the network traffic read from procfs for
+// each container whose network namespace isn't the host's, every container of a pod reporting the
+// pod's traffic -- even one whose PID can't be read anymore, whichever order they're processed in.
+func TestContainerdMetricsNetwork(t *testing.T) {
+	const (
+		namespace  = "k8s.io"
+		podPID     = 4242
+		sidecarPID = 4244
+		otherPID   = 4343
+		exitedPID  = 9999
+	)
+
+	p := newFakeProc(t)
+
+	// The sidecar joins the pod's network namespace, which a symlink reproduces here.
+	if err := os.MkdirAll(p.pidDir(sidecarPID), 0o750); err != nil {
+		t.Fatal("Can't create fake procfs:", err)
+	}
+
+	if err := os.Symlink(filepath.Join(p.pidDir(podPID), "net"), filepath.Join(p.pidDir(sidecarPID), "net")); err != nil {
+		t.Fatal("Can't create fake pod network namespace:", err)
+	}
+
+	newContainer := func(id string, pid int, netNS netNamespace, labels map[string]string) containerObject {
+		return containerObject{
+			namespace:    namespace,
+			info:         ContainerOCISpec{Container: containers.Container{ID: id, Labels: labels}},
+			pid:          pid,
+			state:        string(client.Running),
+			netNamespace: netNS,
+		}
+	}
+
+	podLabels := map[string]string{"io.kubernetes.pod.uid": "pod-uid"}
+
+	c := newWithOpenner(nil, p.hostRoot, nil, func(facts.Container) bool { return false }, nil)
+	c.client = metricsClient{MockClient: &MockClient{}}
+	c.lastUpdate = time.Now()
+	c.containers = map[string]containerObject{}
+
+	for _, cont := range []containerObject{
+		newContainer("app", podPID, netNamespaceIsolated, podLabels),
+		newContainer("sidecar", sidecarPID, netNamespaceIsolated, podLabels),
+		// Its task exited since the cache refresh: its PID is gone.
+		newContainer("exited", exitedPID, netNamespaceIsolated, podLabels),
+		newContainer("other", otherPID, netNamespaceIsolated, nil),
+		newContainer("hostnet", 1, netNamespaceHost, nil),
+		newContainer("unknown", otherPID, netNamespaceUnknown, nil),
+	} {
+		c.containers[cont.ID()] = cont
+	}
+
+	now := time.Now()
+
+	p.writeNetDev(t, podPID, netDevLine("eth0", 1000, 2000))
+	p.writeNetDev(t, otherPID, netDevLine("eth0", 5000, 5000))
+
+	if _, err := c.Metrics(t.Context(), now); err != nil {
+		t.Fatal("Metrics() failed:", err)
+	}
+
+	p.writeNetDev(t, podPID, netDevLine("eth0", 2000, 4000))
+	p.writeNetDev(t, otherPID, netDevLine("eth0", 5100, 5200))
+
+	points, err := c.Metrics(t.Context(), now.Add(10*time.Second))
+	if err != nil {
+		t.Fatal("Metrics() failed:", err)
+	}
+
+	got := make(map[string]float64)
+
+	for _, point := range points {
+		if name := point.Labels[types.LabelName]; strings.HasPrefix(name, "container_net_") {
+			got[point.Labels[types.LabelMetaContainerID]+" "+name] = point.Value
+		}
+	}
+
+	// 1000 bytes received in 10s = 800 bits/s.
+	want := map[string]float64{
+		namespace + "/app container_net_bits_recv":     800,
+		namespace + "/app container_net_bits_sent":     1600,
+		namespace + "/sidecar container_net_bits_recv": 800,
+		namespace + "/sidecar container_net_bits_sent": 1600,
+		namespace + "/exited container_net_bits_recv":  800,
+		namespace + "/exited container_net_bits_sent":  1600,
+		namespace + "/other container_net_bits_recv":   80,
+		namespace + "/other container_net_bits_sent":   160,
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("network points = %v, want %v", got, want)
+	}
+}
+
+// TestContainerdDiagnosticArchiveNetNamespace checks that the diagnostic archive tells why a container
+// has no network metrics.
+func TestContainerdDiagnosticArchiveNetNamespace(t *testing.T) {
+	c := newWithOpenner(nil, "", nil, func(facts.Container) bool { return false }, nil)
+
+	for _, cont := range []containerObject{
+		{namespace: "k8s.io", info: ContainerOCISpec{Container: containers.Container{ID: "app"}}, pid: 4242, netNamespace: netNamespaceIsolated},
+		{namespace: "k8s.io", info: ContainerOCISpec{Container: containers.Container{ID: "hostnet"}}, pid: 4343, netNamespace: netNamespaceHost},
+		{namespace: "k8s.io", info: ContainerOCISpec{Container: containers.Container{ID: "stopped"}}, pid: 4444},
+	} {
+		c.containers[cont.ID()] = cont
+	}
+
+	var buffer bytes.Buffer
+
+	if err := c.DiagnosticArchive(t.Context(), archivewriter.NewSingleFileWriter("containerd.json", &buffer)); err != nil {
+		t.Fatal("DiagnosticArchive() failed:", err)
+	}
+
+	var archive struct {
+		Containers []struct {
+			ID           string
+			PID          int
+			NetNamespace string
+		}
+	}
+
+	if err := json.Unmarshal(buffer.Bytes(), &archive); err != nil {
+		t.Fatal("Can't decode containerd.json:", err)
+	}
+
+	got := make(map[string]string)
+
+	for _, cont := range archive.Containers {
+		got[cont.ID] = fmt.Sprintf("%d %s", cont.PID, cont.NetNamespace)
+	}
+
+	want := map[string]string{
+		"k8s.io/app":     "4242 isolated",
+		"k8s.io/hostnet": "4343 host",
+		"k8s.io/stopped": "4444 unknown",
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("containers in containerd.json = %v, want %v", got, want)
 	}
 }

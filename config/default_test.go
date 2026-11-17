@@ -169,13 +169,17 @@ func TestDefaultNetworkIgnore(t *testing.T) {
 		testEth0,
 		"tap0",
 		"tun0",
+		"tunl0", // Calico's IP-in-IP tunnel, whose traffic belongs to the host.
 		"vlan10",
 		"vtnet0",
+		"vxlan.calico",
+		"wireguard.cali",
 		"wlan0",
 		"wlp12s0",
 	}
 
 	deniedInterface := []string{
+		"cali8d2e7f3a1b4", // Host side of a Calico pod's veth.
 		"docker0",
 		"lo",
 		"lo0",
