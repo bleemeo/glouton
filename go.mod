@@ -2,6 +2,15 @@ module github.com/bleemeo/glouton
 
 go 1.27.0
 
+// Pinned: newer versions change the ntp/chrony IPAddr API, which telegraf does not
+// support yet. Don't bump until telegraf has migrated.
+replace github.com/facebook/time => github.com/facebook/time v0.0.0-20250903103710-a5911c32cdb9
+
+// Pinned: v1.40.0+ requires gobwas/glob v1.0.0 (Pattern struct API), which breaks
+// collector/confmap and contrib/pkg/ottl that still use the v0.2.3 Glob interface.
+// Don't bump until otel-collector and contrib have migrated to glob v1.0.0.
+replace github.com/influxdata/telegraf => github.com/influxdata/telegraf v1.39.3
+
 require (
 	dario.cat/mergo v1.0.2
 	github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716
@@ -18,8 +27,6 @@ require (
 	github.com/containerd/platforms v1.0.0-rc.5
 	github.com/containerd/typeurl/v2 v2.3.0
 	github.com/eclipse/paho.mqtt.golang v1.5.1
-	// Pinned: newer versions change the ntp/chrony IPAddr API, which telegraf does not
-	// support yet. Don't bump until telegraf has migrated.
 	github.com/facebook/time v0.0.0-20250903103710-a5911c32cdb9
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/getsentry/sentry-go v0.50.0
@@ -31,9 +38,6 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.6.0
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853
-	// Pinned: v1.40.0+ requires gobwas/glob v1.0.0 (Pattern struct API), which breaks
-	// collector/confmap and contrib/pkg/ottl that still use the v0.2.3 Glob interface.
-	// Don't bump until otel-collector and contrib have migrated to glob v1.0.0.
 	github.com/influxdata/telegraf v1.39.3
 	github.com/influxdata/toml v0.0.0-20251106153700-c381e153d076
 	github.com/json-iterator/go v1.1.12
