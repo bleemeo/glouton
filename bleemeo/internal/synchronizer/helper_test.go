@@ -195,6 +195,14 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 		IsMetricAllowed:            func(_ map[string]string) bool { return true },
 		BlackboxScraperName:        helper.cfg.Blackbox.ScraperName,
 		LastMetricAnnotationChange: func() time.Time { return time.Time{} },
+		PushAppender:               model.NewBufferAppender(),
+		// The Bleemeo connector's callbacks also end in these methods.
+		DisableCallback: func(reason bleemeoTypes.DisableReason, until time.Time) {
+			helper.s.Disable(until, reason)
+		},
+		SetBleemeoInMaintenanceMode: func(ctx context.Context, maintenance bool) {
+			helper.s.SetMaintenance(ctx, maintenance)
+		},
 	}, helper.Now)
 
 	helper.s = s

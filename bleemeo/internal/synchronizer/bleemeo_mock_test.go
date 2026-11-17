@@ -44,6 +44,8 @@ type wrapperClientMock struct {
 	errorsCount  int
 	// monitorsErr is returned by ListMonitors and GetMonitorByID when set.
 	monitorsErr error
+	// globalInfo is returned by GetGlobalInfo.
+	globalInfo bleemeoTypes.GlobalInfo
 
 	username, password string
 }
@@ -120,7 +122,9 @@ func (wcm *wrapperClientMock) ThrottleDeadline() time.Time {
 }
 
 func (wcm *wrapperClientMock) GetGlobalInfo(context.Context) (bleemeoTypes.GlobalInfo, error) {
-	return bleemeoTypes.GlobalInfo{}, nil
+	wcm.count("info", "GetGlobalInfo")
+
+	return wcm.globalInfo, nil
 }
 
 func (wcm *wrapperClientMock) RegisterSelf(_ context.Context, accountID, password, initialServerGroupName, name, fqdn, _ string) (id string, err error) {

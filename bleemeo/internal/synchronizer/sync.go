@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"net"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -41,6 +40,7 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncconfig"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncdiagnostics"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncgloutonconfig"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncinfo"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncregistrationstatus"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncsnmp"
@@ -92,8 +92,9 @@ type Synchronizer struct {
 	synchronizers []types.EntitySynchronizer
 	state         *synchronizerState
 	hasFeature    map[types.APIFeature]bool
-	// diagnostics, snmp and vsphere are also in synchronizers, kept for the methods forwarded
-	// to them.
+	// info, diagnostics, snmp and vsphere are also in synchronizers, kept for the methods
+	// forwarded to them.
+	info        *syncinfo.SyncInfo
 	diagnostics *syncdiagnostics.SyncDiagnostics
 	snmp        *syncsnmp.SyncSNMP
 	vsphere     *syncvsphere.SyncVSphere
@@ -143,14 +144,6 @@ type Synchronizer struct {
 	registrationMetrics map[metricStateKey]int
 	// metricsStatePublished tells whether a synchronization published the metrics state yet.
 	metricsStatePublished bool
-	lastInfo              bleemeoTypes.GlobalInfo
-	// Whether the agent MQTT status should be synced. This is used to avoid syncing
-	// the MQTT status too soon before the agent has tried to connect to MQTT.
-	shouldUpdateMQTTStatus bool
-	// Whether the agent is connected to MQTT. We use a pointer to know if the field is set.
-	isMQTTConnected *bool
-
-	dialer net.Dialer
 }
 
 type thresholdOverrideKey struct {
@@ -196,12 +189,13 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		state:                  state,
 	}
 
+	s.info = syncinfo.New(&s.requestCounter, s.now)
 	s.diagnostics = syncdiagnostics.New(option.State, option.Config.Agent.StateDirectory, s.now)
 	s.snmp = syncsnmp.New(option.State, option.SNMP)
 	s.vsphere = syncvsphere.New(option.State, option.VSphereDevices, s.now)
 
 	s.synchronizers = []types.EntitySynchronizer{
-		&CompatibilityWrapper{state: state, name: types.EntityInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
+		s.info,
 		syncagent.New(),
 		syncconfig.New(option.Cache),
 		&CompatibilityWrapper{state: state, name: types.EntityFact, method: s.syncFacts},
@@ -210,7 +204,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		s.vsphere,
 		syncapplications.New(),
 		syncservices.New(),
-		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
+		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors},
 		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},
 		syncregistrationstatus.New(option, s.metricsState, s.now),
 		syncgloutonconfig.New(option.ConfigItems),
@@ -284,7 +278,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		MaintenanceMode            bool
 		LastMetricCount            int
 		AgentID                    string
-		LastMaintenanceSync        time.Time
 		DisabledUntil              time.Time
 		DisableReason              string
 		LastDuplicateCheck         time.Time
@@ -295,7 +288,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		DelayedContainer           map[string]time.Time
 		RetryableMetricFailure     map[bleemeoTypes.FailureKind]bool
 		MetricRetryAt              time.Time
-		LastInfo                   bleemeoTypes.GlobalInfo
 		ThresholdOverrides         string
 		APIFeatures                map[string]bool
 		StateMarkerAuthBroken      time.Time
@@ -315,7 +307,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		MaintenanceMode:            s.maintenanceMode,
 		LastMetricCount:            s.state.lastMetricCount,
 		AgentID:                    s.agentID,
-		LastMaintenanceSync:        s.state.lastMaintenanceSync,
 		DisabledUntil:              s.disabledUntil,
 		DisableReason:              s.disableReason.String(),
 		LastDuplicateCheck:         s.lastDuplicateCheck,
@@ -326,7 +317,6 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 		DelayedContainer:           delayedContainer,
 		RetryableMetricFailure:     s.retryableMetricFailure,
 		MetricRetryAt:              s.state.metricRetryAt,
-		LastInfo:                   s.lastInfo,
 		ThresholdOverrides:         fmt.Sprintf("%v", s.thresholdOverrides),
 		APIFeatures:                make(map[string]bool, len(s.hasFeature)),
 		StateMarkerAuthBroken:      stateGetTime(agentAuthBrokenCacheKey, s.option.State),
@@ -343,8 +333,19 @@ func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) e
 	return enc.Encode(obj)
 }
 
+// syncInfoBeforeFirstExecution syncs info before the synchronization loop, because the MQTT
+// connection depends on it (maintenance and agent too old).
+// The execution is scoped to this function: it must not be reused by the synchronization loop,
+// which has its own execution per run.
+func (s *Synchronizer) syncInfoBeforeFirstExecution(ctx context.Context) {
+	exec := s.newLimitedExecution(false, map[types.EntityName]types.SyncType{types.EntityInfo: types.SyncTypeNormal})
+
+	// run logs the failure of info.
+	_ = exec.run(ctx)
+}
+
 // Run runs the Synchronizer.
-func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
+func (s *Synchronizer) Run(ctx context.Context) error {
 	s.startedAt = s.now()
 
 	firstSync := true
@@ -363,21 +364,7 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err)
 	}
 
-	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
-	// syncInfo also disable if time drift is too big. We don't do this disable now for a new agent, because
-	// we want it to perform registration and creation of agent_status in order to mark this agent as "bad time" on Bleemeo.
-	// The execution is scoped to this block: it must not be reused by the
-	// synchronization loop below, which has its own execution per run.
-	{
-		exec := s.newLimitedExecution(false, nil)
-
-		_, err = s.syncInfoReal(ctx, exec, !firstSync)
-		if err != nil {
-			logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
-		}
-
-		exec.executePostRunCalls()
-	}
+	s.syncInfoBeforeFirstExecution(ctx)
 
 	s.option.SetInitialized()
 
@@ -633,21 +620,17 @@ func (s *Synchronizer) DiagnosticPage() string {
 	builder.WriteString(<-tcpMessage)
 	builder.WriteString(<-httpMessage)
 
-	s.l.Lock()
-
-	if !s.lastInfo.FetchedAt.IsZero() {
-		bleemeoTime := s.lastInfo.BleemeoTime()
-		delta := s.lastInfo.TimeDrift()
+	if lastInfo := s.info.LastInfo(); !lastInfo.FetchedAt.IsZero() {
+		bleemeoTime := lastInfo.BleemeoTime()
+		delta := lastInfo.TimeDrift()
 		fmt.Fprintf(
 			builder,
 			"Bleemeo /v1/info/ fetched at %v. At this moment, time_drift was %v (time expected was %v)\n",
-			s.lastInfo.FetchedAt.Format(time.RFC3339),
+			lastInfo.FetchedAt.Format(time.RFC3339),
 			delta.Truncate(time.Second),
 			bleemeoTime.Format(time.RFC3339),
 		)
 	}
-
-	s.l.Unlock()
 
 	count := s.requestCounter.Load()
 	fmt.Fprintf(
@@ -1498,17 +1481,13 @@ func (s *Synchronizer) SetMQTTConnected(isConnected bool) {
 	defer s.l.Unlock()
 
 	// Don't set the MQTT status too soon, let some time to the agent to connect.
-	if time.Since(s.startedAt) < time.Minute {
+	if s.now().Sub(s.startedAt) < time.Minute {
 		return
 	}
 
 	// Update the MQTT status when MQTT just became inaccessible.
-	shouldUpdateStatus := (s.isMQTTConnected == nil || *s.isMQTTConnected) && !isConnected
-	s.isMQTTConnected = &isConnected
-
-	if shouldUpdateStatus {
+	if s.info.SetMQTTConnected(isConnected) {
 		s.requestSynchronizationLocked(types.EntityInfo, false)
-		s.shouldUpdateMQTTStatus = true
 	}
 }
 

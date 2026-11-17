@@ -41,13 +41,13 @@ const (
 	cachePrefix             = "bleemeo:vsphere:"
 )
 
-// When modifying this type, ensure to keep the compatibility with the code of
-// vSphere.statusesWhenNoDevices(), in inputs/vsphere/vsphere.go. // TODO: is comment still relevant ?
+// deviceAssociation is the agent of a device, saved in the State under cachePrefix and
+// deviceAssoKey.
 type deviceAssociation struct {
 	MOID   string
 	Source string
 	ID     string
-	// Meant for local usage
+	// key is the State key of the association. It isn't saved.
 	key string
 }
 

@@ -320,13 +320,6 @@ func (e *Execution) run(ctx context.Context) error {
 		compatibilitySyncToPerform(ctx, e, e.synchronizer.state)
 
 		e.applyNeedSynchronization(ctx)
-
-		if e.hadWork() && e.synchronizer.now().Sub(e.synchronizer.lastInfo.FetchedAt) > 30*time.Minute {
-			// Ensure lastInfo is enough up-to-date.
-			// This will help detection quickly a change on /v1/info/ and will ensure the
-			// metric time_drift is updated recently to avoid unwanted deactivation.
-			e.RequestSynchronization(types.EntityInfo, false)
-		}
 	}
 
 	e.checkLinkedSynchronization()
@@ -614,7 +607,7 @@ func (e *Execution) synchronizersCall(ctx context.Context, f func(context.Contex
 		until, reason := e.synchronizer.getDisabledUntil()
 		if e.synchronizer.now().Before(until) {
 			// If the agent was disabled because it is too old, we do not want the synchronizer
-			// to throw a DisableTooManyErrors because syncInfo() disabled the bleemeo connector.
+			// to throw a DisableTooManyErrors because info disabled the bleemeo connector.
 			// This could alter the synchronizer would wait to sync again, and we do not desire it.
 			// This would also show errors that could confuse the user like "Synchronization with
 			// Bleemeo Cloud platform still have to wait 1m27s due to too many errors".

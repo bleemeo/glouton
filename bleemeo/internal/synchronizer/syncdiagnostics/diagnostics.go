@@ -372,7 +372,7 @@ func (diag onDemandDiagnostic) MarkUploaded() error {
 	defer diag.parent.l.Unlock()
 
 	if diag.filename != diag.parent.onDemand.filename {
-		// Another diagnostic replaced ourself in the synchronizer. Don't remove it
+		// Another diagnostic replaced this one. Don't remove it.
 		return nil
 	}
 

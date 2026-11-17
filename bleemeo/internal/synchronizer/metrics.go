@@ -41,9 +41,6 @@ import (
 	"github.com/bleemeo/glouton/utils/metricutils"
 )
 
-// agentStatusName is the name of the special metrics used to store the agent connection status.
-const agentStatusName = "agent_status"
-
 // Metric name constants used across synchronizer code.
 const (
 	metricCPUUsed   = "cpu_used"
@@ -173,7 +170,7 @@ func newComparator() *metricComparator {
 		"io_utilization", "io_read_bytes", "io_write_bytes", "io_reads",
 		"io_writes", "net_bits_recv", "net_bits_sent", "net_packets_recv",
 		"net_packets_sent", "net_err_in", "net_err_out", "disk_used_perc",
-		"swap_used_perc", metricCPUUsed, "mem_used_perc", "agent_config_warning", agentStatusName,
+		"swap_used_perc", metricCPUUsed, "mem_used_perc", "agent_config_warning", types.AgentStatusName,
 	}
 
 	highCard := []string{
@@ -1165,7 +1162,7 @@ func (mr *metricRegisterer) do(ctx context.Context, localMetrics []gloutonTypes.
 		switch state {
 		case metricPassAgentStatus:
 			currentList = []gloutonTypes.Metric{
-				fakeMetric{label: agentStatusName},
+				fakeMetric{label: types.AgentStatusName},
 			}
 		case metricPassMain:
 			currentList = localMetrics
@@ -1545,7 +1542,7 @@ func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[str
 
 	agent := agents[v.AgentID]
 
-	if metricName == agentStatusName {
+	if metricName == types.AgentStatusName {
 		snmpTypeID, found := s.option.Cache.AgentTypeID(bleemeo.AgentType_SNMP)
 
 		// We only skip deactivation of agent_status when it not an SNMP agent.

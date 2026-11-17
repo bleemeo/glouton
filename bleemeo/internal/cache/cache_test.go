@@ -224,6 +224,31 @@ func TestRegistrationStatusSentPersists(t *testing.T) {
 	}
 }
 
+// TestSetAgentUpdatesAgentList checks SetAgent also updates the agent's entry in the agent list,
+// without changing the slice given to SetAgentList, nor adding an agent missing from the list.
+func TestSetAgentUpdatesAgentList(t *testing.T) {
+	cache := &Cache{}
+
+	agents := []types.Agent{
+		{ID: "agent", Tags: []types.Tag{{Name: "old"}}},
+		{ID: "snmp", Tags: []types.Tag{{Name: "printer"}}},
+	}
+	cache.SetAgentList(agents)
+
+	updated := types.Agent{ID: "agent", Tags: []types.Tag{{Name: "new"}}}
+	cache.SetAgent(updated)
+	cache.SetAgent(types.Agent{ID: "not in the list"})
+
+	want := map[string]types.Agent{"agent": updated, "snmp": agents[1]}
+	if diff := cmp.Diff(want, cache.AgentsByUUID()); diff != "" {
+		t.Errorf("AgentsByUUID() mismatch (-want +got):\n%s", diff)
+	}
+
+	if agents[0].Tags[0].Name != "old" {
+		t.Errorf("the slice given to SetAgentList was changed: %+v", agents[0])
+	}
+}
+
 // TestRegistrationStatusSentIsCopied checks the cache does not share its slice with callers.
 func TestRegistrationStatusSentIsCopied(t *testing.T) {
 	cache := &Cache{}

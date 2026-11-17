@@ -37,6 +37,9 @@ import (
 	gloutonTypes "github.com/bleemeo/glouton/types"
 )
 
+// AgentStatusName is the name of the special metric storing the agent connection status.
+const AgentStatusName = "agent_status"
+
 type EntityName string
 
 const (
@@ -352,8 +355,8 @@ type Option struct {
 	SetInitialized func()
 
 	// IsMqttConnected returns whether the MQTT connector is operating nominally, and specifically
-	// that it can receive mqtt notifications. It is useful for the fallback on http polling
-	// described above Synchronizer.lastMaintenanceSync definition.
+	// that it can receive mqtt notifications. While it can't, the end of a maintenance is
+	// checked by polling /v1/info/.
 	// Note: returns false when the mqtt connector is not enabled.
 	IsMqttConnected func() bool
 
